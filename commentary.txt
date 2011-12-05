@@ -1,0 +1,12 @@
+Bundle 8 (Uncinate)
+DivThresh 0.150000; FibWt 0.710000; Green 310; Blue 30; Green and blue 30; missed Green 280; stray Blue 0
+Bundle 8 (Uncinate)
+DivThresh 0.150000; FibWt 0.710000; Green 310; Blue 30; Green and blue 30; missed Green 280; stray Blue 0
+Bundle 8 (Uncinate)
+Bundle 8 (Uncinate)
+DivThresh 0.150000; FibWt 0.710000; Green 310; Blue 30; Green and blue 30; missed Green 280; stray Blue 0
+Bundle 8 (Uncinate)
+Bundle 8 (Uncinate)
+DivThresh 0.150000; FibWt 0.710000; Green 310; Blue 30; Green and blue 30; missed Green 280; stray Blue 0
+Bundle 8 (Uncinate)
+
