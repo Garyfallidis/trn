@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from dipy.tracking.distances import bundles_distances_mam
 from dipy.tracking.distances import bundles_distances_mdf
 from dipy.viz import fvtk
-
+import hung_APC
 
 dname='/home/eg309/Data/PROC_MR10032/subj_08/101_32/'
 fname='1312211075232351192010121409400346984008131ep2dadvdiffDSI10125x25x25STs004a001'
@@ -366,20 +366,20 @@ print '#ef 3r',equal_fraction(d3r,1.,1)
 '''
 
 #fsolid='/home/eg309/Data/LSC_limits/solid_1M.npy'
-fsolid='/home/ian/Data/LSC_stability/solid_1M.npy'
+#fsolid='/home/ian/Data/LSC_stability/solid_1M.npy'
 
-T=np.load(fsolid)
-#print len(T)
-#T=np.array([t for t in list(T) if length(t)>= 40. and length(t)< 60.],dtype=np.object) # 100mm - 200mm
-#print len(T)
+#T=np.load(fsolid)
+#print 'Before',len(T)
+#T=np.array([t for t in list(T) if length(t)>= 40. and length(t)< 120.],dtype=np.object) # 100mm - 200mm
+#print 'After',len(T)
 
-i11=np.random.permutation(1*10**3)#len(T))
-i12=np.random.permutation(1*10**3)#len(T))
+#i11=np.random.permutation(1*10**3)#len(T))
+#i12=np.random.permutation(1*10**3)#len(T))
 #i21=1*10**4+np.random.permutation(1*10**4)#len(T))
 #i22=1*10**4+np.random.permutation(1*10**4)#len(T))
 
-T11=list(T[i11])
-T12=list(T[i12])
+#T11=list(T[i11])
+#T12=list(T[i12])
 #T21=list(T[i21])
 #T22=list(T[i22])
 
@@ -722,7 +722,7 @@ print N
 print compare_classifications(N)
 '''
 
-def multiple_comparisons(samplesize = 10**4, lscdist = 4., replications = 2):
+def multiple_comparisons(T,samplesize = 10**4, lscdist = 4., replications = 2,subj='1'):
     labels1 = np.random.permutation(np.arange(len(T)))[:samplesize]
     #labels1 = np.arange(0*samplesize,1*samplesize)
     T1=T[labels1]
@@ -730,6 +730,7 @@ def multiple_comparisons(samplesize = 10**4, lscdist = 4., replications = 2):
     lists = {}
     C = {}
     results = {}
+    C_size = {}
 
     for replication in np.arange(replications):
         print '... preparing LSC(%d)' % (replication)
@@ -739,10 +740,12 @@ def multiple_comparisons(samplesize = 10**4, lscdist = 4., replications = 2):
         C[replication] = local_skeleton_clustering(T1[rearrangement],lscdist)
         print '... skeleton size %d' % (len(C[replication]))
         lists[replication] = rearrangement
+        C_size[replication] = len(C[replication])
 
-    save_pickle('labels'+str(samplesize)+'.pkl',labels1)
-    save_pickle('C'+str(samplesize)+'.pkl',C)
-    save_pickle('lists'+str(samplesize)+'.pkl',lists)
+    save_pickle('labels'+str(samplesize)+'_'+subj+'.pkl',labels1)
+    save_pickle('C'+str(samplesize)+'_'+subj+'.pkl',C)
+    save_pickle('lists'+str(samplesize)+'_'+subj+'.pkl',lists)
+    save_pickle('C_size'+str(samplesize)+'_'+subj+'.pkl',C_size)
 
     for rep1 in np.arange(replications-1):
         for rep2 in np.arange(rep1+1,replications):
@@ -819,9 +822,20 @@ for i,k in enumerate(x.keys()):
 #print 'max order', maxorder
 '''
 
-results = multiple_comparisons(samplesize=10**4, replications=20)
-save_pickle('results10k.pkl', results)
+"""
+fsolid='/home/eg309/Data/LSC_limits/solid_1M.npy'
+#fsolid='/home/ian/Data/LSC_stability/solid_1M.npy'
 
+T=np.load(fsolid)
+print 'Before',len(T)
+T=np.array([t for t in list(T) if length(t)>= 40. and length(t)< 120.],dtype=np.object) # 100mm - 200mm
+print 'After',len(T)
+
+results = multiple_comparisons(samplesize=len(T), replications=3)
+save_pickle('results_full.pkl', results)
+"""
+
+"""
 results = multiple_comparisons(samplesize=25*10**3, replications=12)
 save_pickle('results25k.pkl', results)
 
@@ -830,4 +844,5 @@ save_pickle('results50k.pkl', results)
 
 results = multiple_comparisons(samplesize=10*10**4, replications=12)
 save_pickle('results100k.pkl', results)
+"""
 

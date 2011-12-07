@@ -6,6 +6,7 @@ from scipy.stats import describe
 
 import csv
 
+"""
 C_sizes = ['10000','25000','50000','100000']
 
 for i,s in enumerate(C_sizes):
@@ -14,8 +15,10 @@ for i,s in enumerate(C_sizes):
     print np.mean(np.array(stats),)
     
 stop
+"""
 
-sizes = ['10k','25k','50k','100k']
+#sizes = ['10k','25k','50k','100k']
+sizes =['_full']
 
 metrics = ['Purity', 'RandomAccuracy', 'PairsConcordancy', 'Completeness', 'Correctness', 'MatchedAgreement', 'MatchedKappa']
 

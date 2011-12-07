@@ -10,7 +10,7 @@ from dipy.tracking.metrics import downsample,length,winding
 from dipy.tracking.vox2track import track_counts
 from nibabel import trackvis as tv
 import scipy.linalg as spl
-
+from scipy.stats import describe
 from dipy.io.dpy import Dpy
 from dipy.io.pickles import load_pickle,save_pickle
 import matplotlib.pyplot as plt
@@ -2459,6 +2459,140 @@ def barchart_QB():
     #autolabel(rects2)
     
     plt.show()
+    
+def barchart_multiple_orderings():
+    
+    dname='/home/eg309/Data/LSC_limits/multiple_comparisons/results_full_'    
+    metrics = ['Purity', 'Random Accuracy', 'Pairs Concordancy', 'Completeness', 'Correctness', 'Matched Agreement', 'Matched Kappa']
+    N=10
+    Means=np.zeros((N,7))
+    Std=np.zeros((N,7))        
+    for i in range(N):
+        fname=dname+str(i)+'.pkl'        
+        means,sds,table=analyze_multiple_comparisons(fname)
+        Means[i,:]=means
+        Std[i,:]=sds        
+
+    fig = plt.figure()
+    ind = np.arange(N)+0.2  # the x locations for the groups
+    width = 0.3       # the width of the bars
+    
+    colors=['r','g','b','c','m','y',(1,0.5,0.2)]
+        
+    for i in range(7):
+        if i==6:    
+            ax = fig.add_subplot(3,3,8)
+            ax.set_xlabel('Subjects')
+        else:
+            ax = fig.add_subplot(3,3,i+1)
+        rects1 = ax.bar(ind, Means[:,i], width, color=colors[i], yerr=Std[:,i])
+        #rects1 = ax.bar(ind, Means[:,i], width, yerr=Std[:,i])        
+        ax.set_ylabel('Scores')
+        ax.set_ylim((0,110))
+        ax.set_title(metrics[i])
+        ax.set_xticks(ind+width/2.)
+        ax.set_xticklabels(('1', '2', '3', '4', '5', '6','7','8','9','10'))
+            
+    plt.show()
+    
+    return
+
+def sizes_orderings_tractographies():
+    dname='/home/eg309/Data/LSC_limits/multiple_comparisons/'    
+    fnames=['C_size35750_0.pkl','C_size36889_1.pkl','C_size33612_2.pkl',\
+     'C_size46358_3.pkl','C_size40400_4.pkl','C_size39967_5.pkl',\
+     'C_size56256_6.pkl','C_size48743_7.pkl','C_size37098_8.pkl','C_size36244_9.pkl']
+    
+    Means=np.zeros(10)
+    Std=np.zeros(10)
+    
+    for (i,f) in enumerate(fnames):
+        filename=dname+f
+        dix=load_pickle(filename)
+        sz=[]
+        for d in dix:
+            sz.append(dix[d])
+        Means[i]=np.mean(sz)
+        Std[i]=np.std(sz)
+        
+    fig = plt.figure()
+    ind = np.arange(10)+0.2  # the x locations for the groups
+    width = 0.5       # the width of the bars
+    
+    colors=['r','g','b','c','m','y',(1,0.5,0.2)]
+        
+    ax = fig.add_subplot(1,1,1)
+    ax.set_xlabel('Subjects')
+    rects1 = ax.bar(ind, Means, width, color=(24/255.,159/255.,222/255.), yerr=Std)
+            
+    ax.set_ylabel('Number of Clusters')
+    #ax.set_ylim((0,110))
+    ax.set_title('Number of clusters for 20 different orderings')
+    ax.set_xticks(ind+width/2.)
+    ax.set_xticklabels(('1', '2', '3', '4', '5', '6','7','8','9','10'))
+            
+    plt.show()
+    
+
+def analyze_multiple_comparisons(filename):
+
+    metrics = ['Purity', 'RandomAccuracy', 'PairsConcordancy', 'Completeness', 'Correctness', 'MatchedAgreement', 'MatchedKappa']
+    
+    alldata = []   
+    
+    results=load_pickle(filename)        
+    keys = results.keys()        
+    table = np.zeros((len(results), len(metrics)))        
+    for i,k in enumerate(keys):
+        r = results[k]
+        for j,m in enumerate(metrics):
+            table[i,j] = r[m]
+    alldata = alldata + [table]                
+    d = describe(table,axis=0)        
+    #size = d[0]
+    type = ['Min','Max','Mean','s.d.']
+    #print >> f, size,'", Min,"'
+    mins = (None,type[0])+tuple(d[1][0])
+    maxs = (None,type[1])+tuple(d[1][0])
+    means = (None,type[2])+tuple(d[2])
+    sds = (None,type[3])+tuple(np.sqrt(d[3]))
+    tab = np.vstack((means,sds))        
+    
+    return means[2:], sds[2:], tab[:,2:]
+
+#def run_multiple_comparisions():
+if __name__=='__main__':    
+    
+    repls=20
+    
+    from LSC_stats import multiple_comparisons
+            
+    dname='/home/eg309/Data/PROC_MR10032/'
+    lfiles=[]
+    for root, dirs, files in os.walk(dname):        
+        if root.endswith('101_32/GQI'):
+            #print root
+            for file in files:
+                if file.endswith('lsc_QA_ref.dpy'):
+                    #print file
+                    lfiles.append(root+'/'+file)
+    
+    for (i,f) in enumerate(lfiles):
+        #f=lfiles[0]
+        print f    
+        #break    
+        dpr=Dpy(f,'r')        
+        T=dpr.read_tracks()
+        dpr.close()                
+        #T=np.load(fsolid)
+        T=[downsample(t,12) for t in T]
+        print 'Before',len(T)
+        T=np.array([t for t in list(T) if length(t)>= 40.*2.5 and length(t)< 120.*2.5],dtype=np.object) # 100mm - 200mm
+        print 'After',len(T)    
+        results = multiple_comparisons(T,samplesize=len(T),lscdist = 4.*2.5, replications=repls,subj=str(i))
+        fres='results_full_'+str(i)+'.pkl'
+        save_pickle(fres, results)        
+        #break
 
 
 
