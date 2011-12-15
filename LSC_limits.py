@@ -2497,6 +2497,54 @@ def barchart_multiple_orderings():
     
     return
 
+def table_multiple_orderings():
+    
+    dname='/home/eg309/Data/LSC_limits/multiple_comparisons/results_full_'    
+    metrics = ['Purity', 'Random Accuracy', 'Pairs Concordancy', 'Completeness', 'Correctness', 'Matched Agreement', 'Matched Kappa']
+    N=10
+    Means=np.zeros((N,7))
+    Std=np.zeros((N,7))  
+    
+    #table_means=np.zeros((10,7))
+    #table_std=np.zeros((10,7))
+          
+    for i in range(N):
+        fname=dname+str(i)+'.pkl'        
+        means,sds,table=analyze_multiple_comparisons(fname)
+        
+        Means[i,:]=means
+        #print means
+        Std[i,:]=sds        
+
+    """
+    fig = plt.figure()
+    ind = np.arange(N)+0.2  # the x locations for the groups
+    width = 0.3       # the width of the bars
+    
+    colors=['r','g','b','c','m','y',(1,0.5,0.2)]
+        
+    for i in range(7):
+        if i==6:    
+            ax = fig.add_subplot(3,3,8)
+            ax.set_xlabel('Subjects')
+        else:
+            ax = fig.add_subplot(3,3,i+1)
+        rects1 = ax.bar(ind, Means[:,i], width, color=colors[i], yerr=Std[:,i])
+        #rects1 = ax.bar(ind, Means[:,i], width, yerr=Std[:,i])        
+        ax.set_ylabel('Scores')
+        ax.set_ylim((0,110))
+        ax.set_title(metrics[i])
+        ax.set_xticks(ind+width/2.)
+        ax.set_xticklabels(('1', '2', '3', '4', '5', '6','7','8','9','10'))
+            
+    plt.show()
+    """
+    
+    return Means, Std
+
+
+
+
 def sizes_orderings_tractographies():
     dname='/home/eg309/Data/LSC_limits/multiple_comparisons/'    
     fnames=['C_size35750_0.pkl','C_size36889_1.pkl','C_size33612_2.pkl',\
@@ -2556,7 +2604,7 @@ def analyze_multiple_comparisons(filename):
     maxs = (None,type[1])+tuple(d[1][0])
     means = (None,type[2])+tuple(d[2])
     sds = (None,type[3])+tuple(np.sqrt(d[3]))
-    tab = np.vstack((means,sds))        
+    tab = np.vstack((means,sds))         
     
     return means[2:], sds[2:], tab[:,2:]
 
