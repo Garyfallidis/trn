@@ -4,7 +4,7 @@ import nibabel as nib
 from dipy.reconst.dti import Tensor
 from dipy.reconst.gqi import GeneralizedQSampling
 from dipy.reconst.dsi import DiffusionSpectrum
-from dipy.tracking.propagation import EuDX
+from dipy.tracking.eudx import EuDX
 from dipy.io.dpy import Dpy
 from dipy.external.fsl import create_displacements, warp_displacements, warp_displacements_tracks
 from dipy.viz import fvtk
@@ -16,8 +16,6 @@ from dipy.reconst.recspeed import peak_finding
 
 def test():
     pass
-
-    
 
 
 def transform_tracks(tracks,affine):
@@ -198,7 +196,7 @@ if __name__ == '__main__':
     
     #stop
     
-    ds=DiffusionSpectrum(data,bvals,bvecs,odf_sphere='symmetric362',half_sphere_grads=True,auto=True,save_odfs=True)
+    ds=DiffusionSpectrum(data,bvals,bvecs,odf_sphere='symmetric642',half_sphere_grads=True,auto=True,save_odfs=True)
     #gq=GeneralizedQSampling(data,bvals,bvecs,1.2,odf_sphere='symmetric642',squared=False,save_odfs=False)
     """
     ei=EquatorialInversion(data,bvals,bvecs,odf_sphere='symmetric642',
@@ -243,7 +241,7 @@ if __name__ == '__main__':
     #euler = EuDX(a=ds.GFA, ind=ds.ind()[:,:,:,0], seeds=no_seeds, a_low=.2)
     #euler = EuDX(a=gq.QA, ind=gq.ind(), seeds=no_seeds, a_low=.0239)
     #tracks = [track for track in euler]
-    euler = EuDX(a=PK, ind=IN, seeds=no_seeds, a_low=.2)
+    euler = EuDX(a=PK, ind=IN, seeds=no_seeds, odf_vertices=ds.odf_vertices, a_low=.2)
     tracks = [track for track in euler]
         
     qb=QuickBundles(tracks,4,12)
