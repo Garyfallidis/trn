@@ -2566,9 +2566,9 @@ def sizes_orderings_tractographies():
     fig = plt.figure()
     ind = np.arange(10)+0.2  # the x locations for the groups
     width = 0.5       # the width of the bars
-    
+    """
     colors=['r','g','b','c','m','y',(1,0.5,0.2)]
-        
+            
     ax = fig.add_subplot(1,1,1)
     ax.set_xlabel('Subjects')
     rects1 = ax.bar(ind, Means, width, color=(24/255.,159/255.,222/255.), yerr=Std)
@@ -2580,6 +2580,9 @@ def sizes_orderings_tractographies():
     ax.set_xticklabels(('1', '2', '3', '4', '5', '6','7','8','9','10'))
             
     plt.show()
+    """
+    return Means, Std
+    
     
 
 def analyze_multiple_comparisons(filename):
