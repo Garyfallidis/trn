@@ -246,7 +246,7 @@ def test():
     #vs=VolumeSlicer(data=Pr)
     #vs.configure_traits()
     
-def show_blobs(blobs, v, faces,fa_slice=None,colormap='jet',size=1.5,scale=2.2):
+def show_blobs(blobs, v, faces,fa_slice=None,colormap='jet',size=1.5,scale=2.2,norm=True):
     """Mayavi gets really slow when triangular_mesh is called too many times
     so this function stacks blobs and calls triangular_mesh once
     """
@@ -266,7 +266,8 @@ def show_blobs(blobs, v, faces,fa_slice=None,colormap='jet',size=1.5,scale=2.2):
         for jj in xrange(blobs.shape[1]):
             for kk in xrange(blobs.shape[2]):
                 m = blobs[ii,jj,kk]
-                m /= (size*abs(m).max())
+                if norm==True:
+                    m /= (size*abs(m).max())                
                 x, y, z = v.T*m/size                
                 x += scale*(ii - xcen)
                 y += scale*(jj - ycen)
