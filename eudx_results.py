@@ -139,33 +139,17 @@ def simple_peaks(ODF,faces,thr,low):
     PK=np.zeros((f,5))
     IN=np.zeros((f,5))
     for (i,odf) in enumerate(S):
-        if odf.max()>low: 
+        if odf.max()>low:
             peaks,inds=peak_finding(odf,faces)            
             ibigp=np.where(peaks>thr*peaks[0])[0]
             l=len(ibigp)
             if l>3:
                 l=3
             PK[i,:l]=peaks[:l]/np.float(peaks[0])
-            IN[i,:l]=inds[:l]            
+            IN[i,:l]=inds[:l]
     PK=PK.reshape(x,y,z,5)
     IN=IN.reshape(x,y,z,5)
     return PK,IN
-
-"""
-def simple_peaks_old(ODF,faces,thr):
-        x,g=ODF.shape
-        PK=np.zeros((x,5))
-        IN=np.zeros((x,5))
-        for (i,odf) in enumerate(ODF):
-            peaks,inds=peak_finding(odf,faces)
-            ibigp=np.where(peaks>thr*peaks[0])[0]
-            l=len(ibigp)
-            if l>3:
-                l=3
-            PK[i,:l]=peaks[:l]
-            IN[i,:l]=inds[:l]
-        return PK,IN
-"""
 
 
 def create_phantom():        
@@ -231,54 +215,81 @@ def create_phantom():
     print 'Obtaining only a part from the data'
     
 if __name__ == '__main__':
-    
+    visual=False
     no_seeds=20**3
     final_name='/home/eg309/Data/orbital_phantoms/100.0_beauty'
     bvals=np.loadtxt('data/subj_01/101_32/raw.bval')
     bvecs=np.loadtxt('data/subj_01/101_32/raw.bvec').T   
     fvolfinal = np.memmap(final_name, dtype='f8', mode='r', shape=(64,64,64,len(bvals)))
     
-    data=fvolfinal[32-20:32+20,32-20:32+20,31-6:34+6,:]
+    sz=20
+    
+    data=fvolfinal[32-sz:32+sz,32-sz:32+sz,31-6:34+6,:]
     ds=DiffusionSpectrum(data,bvals,bvecs,odf_sphere='symmetric642',half_sphere_grads=True,auto=True,save_odfs=True)
-    #gq=GeneralizedQSampling(data,bvals,bvecs,1.2,odf_sphere='symmetric642',squared=False,save_odfs=False)    
+    gq=GeneralizedQSampling(data,bvals,bvecs,1.2,odf_sphere='symmetric642',squared=False,save_odfs=True)    
     ei=EquatorialInversion(data,bvals,bvecs,odf_sphere='symmetric642',half_sphere_grads=True,auto=False,save_odfs=True,fast=True)
-    ei.radius=np.arange(0,5,0.1)
+    ei.radius=np.arange(0,5,0.4)
     ei.gaussian_weight=0.05
     ei.set_operator('laplacian')
     ei.update()
     ei.fit()
-    #print 'Showing data'
-    #show_blobs(ds.ODF[:,:,0,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.)    
-    show_blobs(ds.ODF[:20,20:40,6,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.,norm=True)
-    show_blobs(ei.ODF[:20,20:40,6,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.,norm=True)
+    if visual:
+        #print 'Showing data'
+        #show_blobs(ds.ODF[:,:,0,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.)    
+        show_blobs(ds.ODF[:20,20:40,6,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.,norm=True)
+        show_blobs(ei.ODF[:20,20:40,6,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.,norm=True)
+        show_blobs(gq.ODF[:20,20:40,6,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.,norm=True)
     #
-    PK,IN=simple_peaks(ds.ODF,ds.odf_faces,0.7,0.1*ds.ODF.max())    
-    PK2,IN2=simple_peaks(ei.ODF,ei.odf_faces,0.7,0)    
+    #PK,IN=simple_peaks(ds.ODF,ds.odf_faces,0.7,0.1*ds.ODF.max())    
+    #PK2,IN2=simple_peaks(ei.ODF,ei.odf_faces,0.7,0)
+    #PK2=ei.PK
+    #IN2=ei.IN
     #
     tensors = Tensor(data, bvals, bvecs, thresh=50)
     FA = tensors.fa()    
     #MASK=np.zeros(FA.shape)
     #MASK=(FA>.5)&(FA<.8)    
     #cleanup background     
-    PK2[FA<.2]=np.zeros(5)        
+    ds.PK[FA<.2]=np.zeros(5) 
+    ei.PK[FA<.2]=np.zeros(5)
+    gq.PK[FA<.2]=np.zeros(5) 
+            
     #euler = EuDX(a=FA, ind=tensors.ind(), seeds=no_seeds, a_low=.2)
     #euler = EuDX(a=ds.GFA, ind=ds.ind()[:,:,:,0], seeds=no_seeds, a_low=.2)
     #euler = EuDX(a=gq.QA, ind=gq.ind(), seeds=no_seeds, a_low=.0239)
     #tracks = [track for track in euler]
-    euler = EuDX(a=PK, ind=IN, seeds=no_seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+    
+    x,y,z,g=ei.PK.shape
+    seeds=np.zeros((no_seeds,3))
+    for i in range(no_seeds):        
+        rx=(x-1)*np.random.rand()
+        ry=(y-1)*np.random.rand()
+        rz=(z-1)*np.random.rand()            
+        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)
+        seeds[i]=seed
+    
+    euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
     tracks = [track for track in euler]    
-    euler2 = EuDX(a=PK2, ind=IN2, seeds=no_seeds, odf_vertices=ei.odf_vertices, a_low=.2)
-    tracks2 = [track for track in euler2]    
+    euler2 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+    tracks2 = [track for track in euler2]
+    euler3 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+    tracks3 = [track for track in euler3]
+        
     #simplify
-    qb=QuickBundles(tracks,4,12)
-    virtuals=qb.virtuals()
+    #qb=QuickBundles(tracks,4,12)
+    #virtuals=qb.virtuals()
     #show tracks
-    r=fvtk.ren()
-    r.SetBackground(1.,1.,1.)
-    fvtk.add(r,fvtk.line(tracks,fvtk.red))
-    fvtk.show(r)
-    fvtk.clear(r)
-    #fvtk.add(r,fvtk.line(virtuals,fvtk.red))
-    fvtk.add(r,fvtk.line(tracks2,fvtk.red,linewidth=3.))
-    fvtk.show(r)
+    
+    if visual:
+        
+        r=fvtk.ren()
+        r.SetBackground(1.,1.,1.)
+        fvtk.add(r,fvtk.line(tracks,fvtk.red))
+        fvtk.show(r)
+        fvtk.clear(r)    
+        fvtk.add(r,fvtk.line(tracks2,fvtk.red,linewidth=1.))    
+        fvtk.show(r)
+        fvtk.clear(r)
+        fvtk.add(r,fvtk.line(tracks3,fvtk.red,linewidth=1.))    
+        fvtk.show(r)
 

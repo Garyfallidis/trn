@@ -107,16 +107,25 @@ bun3=bundle+bundle3+bundle4
 from fos import World, Window, DefaultCamera
 from fos.actor.curve import InteractiveCurves
 
+"""
 w=World()
-
 wi=Window(bgcolor=(1.,1.,1.,1.),width=1000,height=1000)
-wi.attach(w)
-    
+wi.attach(w)    
 w.add(line(bundle,[1,0,0,1]))
 w.add(line(bundle3,[0,1,0,1]))
 w.add(line(bundle4,[0,0,1,1]))
-
 print len(bun3)
+"""
+
+r=fvtk.ren()
+
+r.SetBackground(1,1,1.)
+
+fvtk.add(r,fvtk.line(bundle,fvtk.red,linewidth=3))
+fvtk.add(r,fvtk.line(bundle3,fvtk.green,linewidth=3))
+fvtk.add(r,fvtk.line(bundle4,fvtk.blue,linewidth=3))
+fvtk.show(r,size=(800,800))
+
 
 from LSC_limits import bring_virtuals
 
@@ -126,28 +135,30 @@ C8=local_skeleton_clustering(Td,8)
 vs,ls,tot=bring_virtuals(C8)
 vs2=shift(vs,np.array([0,0,0],'f4'))
 
-
+"""
 wi2=Window(bgcolor=(1.,1.,1.,1.),width=1000,height=1000)
 wi3=Window(bgcolor=(1.,1.,1.,1.),width=1000,height=1000)
-
 w2=World()
 w3=World()
-
-
 wi2.attach(w2)
 wi3.attach(w3)
-
 w2.add(line(vs2,np.array([[1,0,1,1],[0,1,0,1]],'f4')))
+"""
+
+fvtk.clear(r)
+fvtk.add(r,fvtk.line(vs2,np.array([[1,0,1],[0,1,0]],'f4'),linewidth=3))
+fvtk.show(r,size=(800,800))
+
 
 C2=local_skeleton_clustering(Td,1)
 vs,ls,tot=bring_virtuals(C2)
 vs2=shift(vs,np.array([0,0,0],'f4'))
+"""
 w3.add(line(vs2,np.array([[1,0,0,1],[1,0,0,1],[0,1,0,1],[0,1,0,1],[0,1,0,1],[0,0,1,1],[0,0,1,1],[0,0,1,1]],'f4') ))
-
-
-
-
-
+"""
+fvtk.clear(r)
+fvtk.add(r,fvtk.line(vs2,np.array([[1,0,0],[1,0,0],[0,1,0],[0,1,0],[0,1,0],[0,0,1],[0,0,1],[0,0,1]],'f4'),linewidth=3))
+fvtk.show(r,size=(800,800))
 
 
 #fvtk.add(r,fvtk.line(bundle2,fvtk.blue))
