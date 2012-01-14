@@ -215,6 +215,13 @@ def create_phantom():
     print 'Obtaining only a part from the data'
     
 if __name__ == '__main__':
+    
+    
+    from dipy.reconst.recspeed import trilinear_interp
+    
+    #A=np.ones((4,4,4,102)) 
+    #stop
+    
     visual=False
     no_seeds=20**3
     final_name='/home/eg309/Data/orbital_phantoms/100.0_beauty'
@@ -222,7 +229,7 @@ if __name__ == '__main__':
     bvecs=np.loadtxt('data/subj_01/101_32/raw.bvec').T   
     fvolfinal = np.memmap(final_name, dtype='f8', mode='r', shape=(64,64,64,len(bvals)))
     
-    sz=20
+    sz=5
     
     data=fvolfinal[32-sz:32+sz,32-sz:32+sz,31-6:34+6,:]
     ds=DiffusionSpectrum(data,bvals,bvecs,odf_sphere='symmetric642',half_sphere_grads=True,auto=True,save_odfs=True)
@@ -233,6 +240,9 @@ if __name__ == '__main__':
     ei.set_operator('laplacian')
     ei.update()
     ei.fit()
+    
+    stop
+    
     if visual:
         #print 'Showing data'
         #show_blobs(ds.ODF[:,:,0,:][:,:,None,:],ds.odf_vertices,ds.odf_faces,size=1.5,scale=1.)    
