@@ -254,7 +254,20 @@ def create_phantom():
     print 'Noise added'
     print 'Okay phantom created! Done!'
     
-    
+def count_tracks_mask(tracks,mask):
+
+    count=0
+    for t in tracks:
+        first=np.round(t[0]).astype(np.int)
+        last=np.round(t[-1]).astype(np.int)
+        if mask[tuple(first)]>0:
+            count+=1
+        if mask[tuple(last)]>0:
+            count+=1
+    return count
+
+
+
 def show_saved_tracks():
     
     from dipy.viz import fvtk
@@ -286,15 +299,14 @@ if __name__ == '__main__':
     #stop    
     visual=False
     save_odfs=False
-    no_seeds=20**3
+    no_seeds=200
     final_name='/home/eg309/Data/orbital_phantoms/100.0_beauty'
     bvals=np.loadtxt('data/subj_01/101_32/raw.bval')
     bvecs=np.loadtxt('data/subj_01/101_32/raw.bvec').T   
     fvolfinal = np.memmap(final_name, dtype='f8', mode='r', shape=(64,64,64,len(bvals)))    
     #sz=20
     #data=fvolfinal[32-sz:32+sz,32-sz:32+sz,31-6:34+6,:]
-    data=fvolfinal[:]
-        
+    data=fvolfinal[:]        
     t0=time()    
     tensors = Tensor(data, bvals, bvecs, thresh=50)
     FA = tensors.fa()
@@ -352,7 +364,7 @@ if __name__ == '__main__':
         if mask[rx,ry,rz]==1:        
             seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)
             seeds[sid]=seed
-            sid+=1        
+            sid+=1    
 
     #euler integration
     euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
@@ -363,10 +375,26 @@ if __name__ == '__main__':
     tracks3 = [track for track in euler3]
     print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
 
+
+    test_mask=np.zeros(mask.shape)
+    pts=[t[0] for t in tracks3]
+    pts2=[t[-1] for t in tracks3]
+    
+    for p in pts:
+        idx=np.round(p).astype(np.int)
+        print idx
+        test_mask[tuple(idx)]=1
+    
+    for p in pts2:
+        idx=np.round(p).astype(np.int)
+        print idx
+        test_mask[tuple(idx)]=2
+    
+
     #simplify
     #qb=QuickBundles(tracks,4,12)
     #virtuals=qb.virtuals()
-    #show tracks    
+    #show tracks
     if visual:
         r=fvtk.ren()
         r.SetBackground(1.,1.,1.)
