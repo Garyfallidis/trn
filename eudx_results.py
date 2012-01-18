@@ -375,22 +375,25 @@ if __name__ == '__main__':
     tracks3 = [track for track in euler3]
     print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
 
-
     test_mask=np.zeros(mask.shape)
     pts=[t[0] for t in tracks3]
     pts2=[t[-1] for t in tracks3]
     
+    cnt=0
     for p in pts:
         idx=np.round(p).astype(np.int)
         print idx
-        test_mask[tuple(idx)]=1
-    
+        if maskB[tuple(idx)]==2:
+            test_mask[tuple(idx)]=1
+            cnt+=1       
+    cnt2=0
     for p in pts2:
         idx=np.round(p).astype(np.int)
         print idx
-        test_mask[tuple(idx)]=2
+        if maskB[tuple(idx)]==2:
+            test_mask[tuple(idx)]=1
+            cnt2+=1
     
-
     #simplify
     #qb=QuickBundles(tracks,4,12)
     #virtuals=qb.virtuals()
