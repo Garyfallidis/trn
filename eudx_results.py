@@ -16,6 +16,7 @@ from visualize_dsi import show_blobs
 from dipy.segment.quickbundles import QuickBundles
 from dipy.reconst.recspeed import peak_finding
 from dipy.io.pickles import load_pickle,save_pickle
+from dipy.tracking.vox2track import track_counts
 
 def test():
     pass
@@ -138,7 +139,6 @@ def f3D(t):
     z=np.zeros(x.shape)
     return x,y,z
 
-
 def gaussian_noise(vol,snr):
     voln=np.random.randn(*vol.shape[:3])
     pvol=np.sum(vol[:,:,:,0]**2) #power of initial volume
@@ -165,7 +165,6 @@ def simple_peaks(ODF,faces,thr,low):
     PK=PK.reshape(x,y,z,5)
     IN=IN.reshape(x,y,z,5)
     return PK,IN
-
 
 def create_phantom():        
     SNR=100.
@@ -201,7 +200,7 @@ def create_phantom():
     maskB=vol2[...,0]>0
     np.save('/tmp/maskB.npy',maskB)
     del vol2        
-    
+
     print 'generate second simulation'
     vol3=orbital_phantom(bvals=bvals,bvecs=bvecs,evals=np.array([0.0017,0.0001,0.0001]),func=f3,datashape=(64,64,64,len(bvals)))
     fvol3 = np.memmap('/tmp/t3', dtype='f8', mode='w+', shape=(64,64,64,len(bvals)))
@@ -254,30 +253,26 @@ def create_phantom():
     print 'Noise added'
     print 'Okay phantom created! Done!'
     
-def count_tracks_mask(tracks,mask):
-
-    count=0
-    for t in tracks:
-        first=np.round(t[0]).astype(np.int)
-        last=np.round(t[-1]).astype(np.int)
-        if mask[tuple(first)]>0:
-            count+=1
-        if mask[tuple(last)]>0:
-            count+=1
-    return count
-
-
-
-def show_saved_tracks():
+def count_tracks_mask(tracks,shape,mask,value):
+    tcs,tes=track_counts(tracks,shape,return_elements=True)    
+    inds=np.array(np.where(mask==value)).T
+    tracks_mask=[]
+    for p in inds:
+        try:
+            tracks_mask+=tes[tuple(p)]
+        except KeyError:
+            pass
+    return list(set(tracks_mask))
     
-    from dipy.viz import fvtk
-    from dipy.io.pickles import load_pickle
-    res=load_pickle('sim_eudx.pkl')
-    r=fvtk.ren()
-    r.SetBackground(1.,1.,1.)
-    fvtk.add(r,fvtk.line(res['ei'],fvtk.blue))
-    fvtk.show(r)
+def stats_count_tracks_mask(tracks,shape,maskA,maskB,maskC,maskD):
     
+    tracksA=count_tracks_mask(tracks,shape,maskA,1)        
+    tracksB=count_tracks_mask(tracks,shape,maskB,2)
+    tracksC=count_tracks_mask(tracks,shape,maskC,3)    
+    tracksD=count_tracks_mask(tracks,shape,maskD,4)    
+    lens=(len(tracksA),len(tracksB),len(tracksC),len(tracksD))
+    return lens,(tracksA,tracksB,tracksC,tracksD)
+        
 if __name__ == '__main__':    
     
     #create_phantom()
@@ -293,8 +288,7 @@ if __name__ == '__main__':
     maskC[maskC>0]=3
     maskD[maskD>0]=4
     #Create a single mask
-    mask=maskA+maskB+maskC+maskD   
-    
+    mask=maskA+maskB+maskC+maskD    
     #A=np.ones((4,4,4,102)) 
     #stop    
     visual=False
@@ -342,18 +336,8 @@ if __name__ == '__main__':
     ds.PK[FA<.2]=np.zeros(5) 
     ei.PK[FA<.2]=np.zeros(5)
     gq.PK[FA<.2]=np.zeros(5)
-
     #create random seeds
     x,y,z,g=ei.PK.shape
-    """
-    seeds=np.zeros((no_seeds,3))
-    for i in range(no_seeds):        
-        rx=(x-1)*np.random.rand()
-        ry=(y-1)*np.random.rand()
-        rz=(z-1)*np.random.rand()            
-        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)
-        seeds[i]=seed
-    """
     #create seeds in mask A
     seeds=np.zeros((no_seeds,3))
     sid=0
@@ -361,39 +345,42 @@ if __name__ == '__main__':
         rx=(x-1)*np.random.rand()
         ry=(y-1)*np.random.rand()
         rz=(z-1)*np.random.rand()
-        if mask[rx,ry,rz]==1:        
+        if mask[rx,ry,rz]==1:
             seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)
             seeds[sid]=seed
-            sid+=1    
-
+            sid+=1
     #euler integration
     euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
-    tracks = [track for track in euler]    
+    tracks = [track for track in euler]
     euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
     tracks2 = [track for track in euler2]    
     euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
     tracks3 = [track for track in euler3]
     print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
+    #temp_save={'maskA':maskA,'maskB':maskB,'ds':tracks,'gq':tracks2,'ei':tracks3}    
+    #save_pickle('/tmp/temp_save',temp_save)
 
-    test_mask=np.zeros(mask.shape)
-    pts=[t[0] for t in tracks3]
-    pts2=[t[-1] for t in tracks3]
+    shape=(x,y,z)
+    print shape
+    tracksA=count_tracks_mask(tracks3,shape,maskA,1)        
+    tracksB=count_tracks_mask(tracks3,shape,maskB,2)
+    tracksC=count_tracks_mask(tracks3,shape,maskC,3)    
+    tracksD=count_tracks_mask(tracks3,shape,maskD,4)    
+
+    def tT(tracks,ind):
+        return [tracks[i] for i in ind]
     
-    cnt=0
-    for p in pts:
-        idx=np.round(p).astype(np.int)
-        print idx
-        if maskB[tuple(idx)]==2:
-            test_mask[tuple(idx)]=1
-            cnt+=1       
-    cnt2=0
-    for p in pts2:
-        idx=np.round(p).astype(np.int)
-        print idx
-        if maskB[tuple(idx)]==2:
-            test_mask[tuple(idx)]=1
-            cnt2+=1
-    
+    #"""
+    r=fvtk.ren()
+    #fvtk.add(r,fvtk.line(tT(tracks3,tracksA),fvtk.red))
+    #fvtk.add(r,fvtk.line(tT(tracks3,tracksB),fvtk.blue))
+    fvtk.add(r,fvtk.line(tT(tracks3,tracksC),fvtk.green))
+    #fvtk.add(r,fvtk.line(tT(tracks3,tracksD),fvtk.yellow))
+    fvtk.add(r,fvtk.point(seeds,fvtk.green))
+    #fvtk.add(r,fvtk.line(tracks3,fvtk.red))
+    fvtk.show(r)
+    #"""
+            
     #simplify
     #qb=QuickBundles(tracks,4,12)
     #virtuals=qb.virtuals()
