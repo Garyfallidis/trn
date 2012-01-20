@@ -67,7 +67,11 @@ def humans():
             ei.gaussian_weight=0.05
             ei.set_operator('laplacian')
             ei.update()
-            ei.fit()           
+            ei.fit()    
+            
+            ds.PK[FA<.2]=np.zeros(5) 
+            ei.PK[FA<.2]=np.zeros(5)
+            gq.PK[FA<.2]=np.zeros(5)                   
                         
             print 'create seeds'
             x,y,z,g=ei.PK.shape
@@ -99,6 +103,7 @@ def humans():
             mat=flirt2aff(np.loadtxt(flirt_mat),img_fa,img_ref)
             del img_fa
             del img_ref
+            
             print 'transform the tracks'
             tensor_linear = transform_tracks(tensor_tracks,mat)
             ds_linear = transform_tracks(ds_tracks,mat)
@@ -117,6 +122,20 @@ def humans():
             print dpy_filename
             dpr_linear = Dpy(dpy_filename, 'w')
             dpr_linear.write_tracks(ei_linear)
+            dpr_linear.close()
+            
+            print 'save ds tracks'
+            dpy_filename = base_dir + 'DTI/ds_linear.dpy'
+            print dpy_filename
+            dpr_linear = Dpy(dpy_filename, 'w')
+            dpr_linear.write_tracks(ds_linear)
+            dpr_linear.close()
+            
+            print 'save gq tracks'
+            dpy_filename = base_dir + 'DTI/gq_linear.dpy'
+            print dpy_filename
+            dpr_linear = Dpy(dpy_filename, 'w')
+            dpr_linear.write_tracks(ds_linear)
             dpr_linear.close()
             
             #save tracks_warped_linear
