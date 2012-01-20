@@ -26,8 +26,9 @@ def transform_tracks(tracks,affine):
 
 def humans():   
 
-    no_seeds=10**6
+    no_seeds=10**5
     visualize = False
+    save_odfs = False
     dirname = "data/"    
     for root, dirs, files in os.walk(dirname):
         if root.endswith('101_32'):
@@ -41,6 +42,7 @@ def humans():
             flirt_mat = base_dir + 'DTI/flirt.mat'    
             fa_filename = base_dir + 'DTI/fa.nii.gz'
             fsl_ref = '/usr/share/fsl/data/standard/FMRIB58_FA_1mm.nii.gz'
+            dpy_filename = base_dir + 'DTI/res_tracks_dti.dpy'
     
             print bvec_filename
             
@@ -53,42 +55,69 @@ def humans():
             tensors = Tensor(data, bvals, gradients, thresh=50)
             FA = tensors.fa()
             euler = EuDX(a=FA, ind=tensors.ind(), seeds=no_seeds, a_low=.2)
-            tensor_tracks = [track for track in euler]
-    
-            dpy_filename = base_dir + 'DTI/res_tracks_dti.dpy'
-            dpw = Dpy(dpy_filename, 'w')
-            dpw.write_tracks(tensor_tracks)
-            dpw.close()
+            tensor_tracks = [track for track in euler]    
+                        
+            FA = tensors.fa()
+            famask=FA>=.2
             
-            #gqs=GeneralizedQSampling(data,bvals,gradients)
-            #euler=EuDX(a=gqs.qa(),ind=gqs.ind(),seeds=no_seeds,a_low=.0239)
-            #gqs_tracks = [track for track in euler]
-            
-            #dpy_filename = base_dir + 'DTI/res_tracks_gqi.dpy'
-            #dpw = Dpy(dpy_filename, 'w')
-            #dpw.write_tracks(gqs_tracks)
-            #dpw.close()
-            
-            img_fa =nib.load(fa_filename)
-            img_ref =nib.load(fsl_ref)
-            mat=flirt2aff(np.loadtxt(flirt_mat),img_fa,img_ref)
-            del img_fa
-            del img_ref       
-            
-            tensor_linear = transform_tracks(tensor_tracks,mat)
-            #gqi_linear = transform_tracks(gqs_tracks,mat)        
-        
+            ds=DiffusionSpectrum(data,bvals,gradients,odf_sphere='symmetric642',mask=famask,half_sphere_grads=True,auto=True,save_odfs=save_odfs)
+            gq=GeneralizedQSampling(data,bvals,gradients,1.2,odf_sphere='symmetric642',mask=famask,squared=False,save_odfs=save_odfs)
+            ei=EquatorialInversion(data,bvals,gradients,odf_sphere='symmetric642',mask=famask,half_sphere_grads=True,auto=False,save_odfs=save_odfs,fast=True)
+            ei.radius=np.arange(0,5,0.4)
+            ei.gaussian_weight=0.05
+            ei.set_operator('laplacian')
+            ei.update()
+            ei.fit()           
+                        
+            print 'create seeds'
+            x,y,z,g=ei.PK.shape
+            seeds=np.zeros((no_seeds,3))
+            sid=0
+            while sid<no_seeds:
+                rx=(x-1)*np.random.rand()
+                ry=(y-1)*np.random.rand()
+                rz=(z-1)*np.random.rand()
+                seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
+                seeds[sid]=seed
+                sid+=1
+                        
+            euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+            ds_tracks = [track for track in euler]    
+            euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
+            gq_tracks = [track for track in euler2]
+            euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+            ei_tracks = [track for track in euler3]
+                    
             if visualize:
                 renderer = fvtk.ren()
                 fvtk.add(renderer, fvtk.line(tensor_tracks, fvtk.red, opacity=1.0))
                 fvtk.show(renderer)
             
-            #save tracks_warped_linear
+            print 'Load images to be used for registration'
+            img_fa =nib.load(fa_filename)
+            img_ref =nib.load(fsl_ref)
+            mat=flirt2aff(np.loadtxt(flirt_mat),img_fa,img_ref)
+            del img_fa
+            del img_ref
+            print 'transform the tracks'
+            tensor_linear = transform_tracks(tensor_tracks,mat)
+            ds_linear = transform_tracks(ds_tracks,mat)
+            gq_linear = transform_tracks(gq_tracks,mat)
+            ei_linear = transform_tracks(ei_tracks,mat)
+                        
+            print 'save tensor tracks'
             dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
             print dpy_filename
             dpr_linear = Dpy(dpy_filename, 'w')
             dpr_linear.write_tracks(tensor_linear)
-            dpr_linear.close()        
+            dpr_linear.close()
+            
+            print 'save ei tracks'
+            dpy_filename = base_dir + 'DTI/ei_linear.dpy'
+            print dpy_filename
+            dpr_linear = Dpy(dpy_filename, 'w')
+            dpr_linear.write_tracks(ei_linear)
+            dpr_linear.close()
             
             #save tracks_warped_linear
             #dpy_filename = base_dir + 'gqi_linear.dpy'
@@ -128,14 +157,14 @@ def f3(t):
     return x,y,z
 
 def f3C(t):
-    x=np.linspace(-0.5,-0.3,len(t))
-    y=-np.linspace(-0.5,-0.3,len(t))    
+    x=np.linspace(-0.5,-0.4,len(t))
+    y=-np.linspace(-0.5,-0.4,len(t))    
     z=np.zeros(x.shape)
     return x,y,z
 
 def f3D(t):
-    x=np.linspace(0.3,0.5,len(t))
-    y=-np.linspace(0.3,0.5,len(t))    
+    x=np.linspace(0.3,0.4,len(t))
+    y=-np.linspace(0.3,0.4,len(t))    
     z=np.zeros(x.shape)
     return x,y,z
 
@@ -190,13 +219,13 @@ def create_phantom():
     fvol2[:]=fvol2[:]/norm[...,None]
     print 'creating first mask A'
     vol2=orbital_phantom(bvals=bvals,bvecs=bvecs,evals=np.array([0.0017,0.0001,0.0001]),func=f2,
-                         t=np.linspace(0.,np.pi/4.,1000),datashape=(64,64,64,len(bvals)))  
+                         t=np.linspace(0.,np.pi/8.,1000),datashape=(64,64,64,len(bvals)))  
     maskA=vol2[...,0]>0
     np.save('/tmp/maskA.npy',maskA)
     del vol2    
     print 'creating second mask B'
     vol2=orbital_phantom(bvals=bvals,bvecs=bvecs,evals=np.array([0.0017,0.0001,0.0001]),func=f2,
-                         t=np.linspace(3*np.pi/2.-2*np.pi/4.,3*np.pi/2.-np.pi/4.,1000),datashape=(64,64,64,len(bvals)))  
+                         t=np.linspace(3*np.pi/2.-2*np.pi/8.,3*np.pi/2.-np.pi/8.,1000),datashape=(64,64,64,len(bvals)))  
     maskB=vol2[...,0]>0
     np.save('/tmp/maskB.npy',maskB)
     del vol2        
@@ -272,7 +301,43 @@ def stats_count_tracks_mask(tracks,shape,maskA,maskB,maskC,maskD):
     tracksD=count_tracks_mask(tracks,shape,maskD,4)    
     lens=(len(tracksA),len(tracksB),len(tracksC),len(tracksD))
     return lens,(tracksA,tracksB,tracksC,tracksD)
-        
+
+def mask_tracks_statistics(mask,ds,which):    
+    x,y,z,g=ei.PK.shape
+    #mask2=np.zeros(mask.shape)
+    #create seeds in mask A
+    seeds=np.zeros((no_seeds,3))
+    sid=0
+    while sid<no_seeds:
+        rx=(x-1)*np.random.rand()
+        ry=(y-1)*np.random.rand()
+        rz=(z-1)*np.random.rand()
+        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
+        if mask[tuple(np.floor(seed+0.5))]==which:
+            #mask2[tuple(np.floor(seed+0.5))]=2
+            seeds[sid]=seed
+            sid+=1
+    #euler integration
+    euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+    tracks = [track for track in euler]
+    """
+    euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
+    tracks2 = [track for track in euler2]
+    euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+    tracks3 = [track for track in euler3]    
+    print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
+    """    
+    shape=(x,y,z)
+    print shape
+    tracksA=count_tracks_mask(tracks,shape,mask,1)        
+    tracksB=count_tracks_mask(tracks,shape,mask,2)
+    tracksC=count_tracks_mask(tracks,shape,mask,3)    
+    tracksD=count_tracks_mask(tracks,shape,mask,4)
+    
+    return tracks, tracksA, tracksB, tracksC, tracksD
+    
+    
+
 if __name__ == '__main__':    
     
     #create_phantom()
@@ -337,46 +402,26 @@ if __name__ == '__main__':
     ei.PK[FA<.2]=np.zeros(5)
     gq.PK[FA<.2]=np.zeros(5)
     #create random seeds
-    x,y,z,g=ei.PK.shape
-    #create seeds in mask A
-    seeds=np.zeros((no_seeds,3))
-    sid=0
-    while sid<no_seeds:
-        rx=(x-1)*np.random.rand()
-        ry=(y-1)*np.random.rand()
-        rz=(z-1)*np.random.rand()
-        if mask[rx,ry,rz]==1:
-            seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)
-            seeds[sid]=seed
-            sid+=1
-    #euler integration
-    euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
-    tracks = [track for track in euler]
-    euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
-    tracks2 = [track for track in euler2]    
-    euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
-    tracks3 = [track for track in euler3]
-    print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
+ 
     #temp_save={'maskA':maskA,'maskB':maskB,'ds':tracks,'gq':tracks2,'ei':tracks3}    
     #save_pickle('/tmp/temp_save',temp_save)
-
-    shape=(x,y,z)
-    print shape
-    tracksA=count_tracks_mask(tracks3,shape,maskA,1)        
-    tracksB=count_tracks_mask(tracks3,shape,maskB,2)
-    tracksC=count_tracks_mask(tracks3,shape,maskC,3)    
-    tracksD=count_tracks_mask(tracks3,shape,maskD,4)    
+    tracks,tracksA,tracksB,tracksC,tracksD=mask_tracks_statistics(mask,ei,4)
 
     def tT(tracks,ind):
         return [tracks[i] for i in ind]
     
     #"""
     r=fvtk.ren()
-    #fvtk.add(r,fvtk.line(tT(tracks3,tracksA),fvtk.red))
-    #fvtk.add(r,fvtk.line(tT(tracks3,tracksB),fvtk.blue))
-    fvtk.add(r,fvtk.line(tT(tracks3,tracksC),fvtk.green))
-    #fvtk.add(r,fvtk.line(tT(tracks3,tracksD),fvtk.yellow))
-    fvtk.add(r,fvtk.point(seeds,fvtk.green))
+    
+    if len(tracksA)>0:
+        fvtk.add(r,fvtk.line(tT(tracks,tracksA),fvtk.red))
+    if len(tracksB)>0:
+        fvtk.add(r,fvtk.line(tT(tracks,tracksB),fvtk.blue))
+    if len(tracksC)>0:
+        fvtk.add(r,fvtk.line(tT(tracks,tracksC),fvtk.green))
+    if len(tracksD)>0:
+        fvtk.add(r,fvtk.line(tT(tracks,tracksD),fvtk.yellow))
+    #fvtk.add(r,fvtk.point(seeds,fvtk.green))
     #fvtk.add(r,fvtk.line(tracks3,fvtk.red))
     fvtk.show(r)
     #"""
