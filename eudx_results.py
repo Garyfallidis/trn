@@ -62,8 +62,8 @@ def analyze_humans():
             d[4],p[4]=ks_2samp(ei_lengths,gq_lengths)
             d[5],p[5]=ks_2samp(ds_lengths,gq_lengths)
             
-            print p
-            print d
+            print 'KS statistic ',d,'P-value ',p
+            
 
 
 def humans():   
