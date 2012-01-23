@@ -36,12 +36,12 @@ def analyze_humans():
         if root.endswith('101_32'):
             
             base_dir = root+'/'
-            filename = 'raw'                        
-            dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
-            print dpy_filename
-            dpr_linear = Dpy(dpy_filename, 'r')
-            tensor_tracks=dpr_linear.read_tracks()
-            dpr_linear.close()
+            #filename = 'raw'                        
+            #dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
+            #print dpy_filename
+            #dpr_linear = Dpy(dpy_filename, 'r')
+            #tensor_tracks=dpr_linear.read_tracks()
+            #dpr_linear.close()
             
             pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
             dt_lengths=load_pickle(pkl_filename)
