@@ -22,6 +22,7 @@ from dipy.tracking.vox2track import track_counts
 from dipy.viz.colormap import orient2rgb
 from dipy.tracking.metrics import length
 
+from scipy.stats import ks_2samp
 
 def transform_tracks(tracks,affine):
         return [(np.dot(affine[:3,:3],t.T).T + affine[:3,3]) for t in tracks]
@@ -43,17 +44,26 @@ def analyze_humans():
             dpr_linear.close()
             
             pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
-            save_pickle(pkl_filename,lengths(tensor_tracks))
-            
-            """          
-            print 'save lengths'
+            dt_lengths=load_pickle(pkl_filename)
             pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
-            load_pickle(pkl_filename,lengths(ei_tracks))
+            ei_lengths=load_pickle(pkl_filename)
             pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
-            load_pickle(pkl_filename,lengths(gq_tracks))
+            gq_lengths=load_pickle(pkl_filename)
             pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
-            ds_tracks=load_pickle(pkl_filename,lengths(ds_tracks))
-            """
+            ds_lengths=load_pickle(pkl_filename)
+             
+            d=np.zeros(6)
+            p=np.zeros(6)
+                       
+            d[0],p[0]=ks_2samp(dt_lengths,ei_lengths)
+            d[1],p[1]=ks_2samp(dt_lengths,ds_lengths)
+            d[2],p[2]=ks_2samp(dt_lengths,gq_lengths)
+            d[3],p[3]=ks_2samp(ei_lengths,ds_lengths)
+            d[4],p[4]=ks_2samp(ei_lengths,gq_lengths)
+            d[5],p[5]=ks_2samp(ds_lengths,gq_lengths)
+            
+            print p
+            print d
 
 
 def humans():   
