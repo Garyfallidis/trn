@@ -2,6 +2,8 @@ import os
 import numpy as np
 import nibabel as nib
 from time import time
+from fos import World, Window, WindowManager
+from fos.actor.line import Line
 from dipy.reconst.dti import Tensor
 from dipy.reconst.gqi import GeneralizedQSampling
 from dipy.reconst.dsi import DiffusionSpectrum
@@ -17,16 +19,19 @@ from dipy.segment.quickbundles import QuickBundles
 from dipy.reconst.recspeed import peak_finding
 from dipy.io.pickles import load_pickle,save_pickle
 from dipy.tracking.vox2track import track_counts
+from dipy.viz.colormap import orient2rgb
+from dipy.tracking.metrics import length
 
-def test():
-    pass
 
 def transform_tracks(tracks,affine):
         return [(np.dot(affine[:3,:3],t.T).T + affine[:3,3]) for t in tracks]
 
+def lengths(tracks):    
+    return [length(t) for t in tracks]
+
 def humans():   
 
-    no_seeds=10**5
+    no_seeds=10**6
     visualize = False
     save_odfs = False
     dirname = "data/"    
@@ -48,6 +53,7 @@ def humans():
             
             img = nib.load(nii_filename)
             data = img.get_data()
+
             affine = img.get_affine()
             bvals = np.loadtxt(bval_filename)
             gradients = np.loadtxt(bvec_filename).T # this is the unitary direction of the gradient
@@ -135,8 +141,16 @@ def humans():
             dpy_filename = base_dir + 'DTI/gq_linear.dpy'
             print dpy_filename
             dpr_linear = Dpy(dpy_filename, 'w')
-            dpr_linear.write_tracks(ds_linear)
+            dpr_linear.write_tracks(gq_linear)
             dpr_linear.close()
+            
+            print 'save lengths'
+            pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
+            save_pickle(pkl_filename,lengths(ei_tracks))
+            pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
+            save_pickle(pkl_filename,lengths(gq_tracks))
+            pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
+            save_pickle(pkl_filename,lengths(ds_tracks))
             
             #save tracks_warped_linear
             #dpy_filename = base_dir + 'gqi_linear.dpy'
@@ -144,7 +158,8 @@ def humans():
             #dpr_linear = Dpy(dpy_filename, 'w')
             #dpr_linear.write_tracks(gqi_linear)
             #dpr_linear.close()
-            break
+            #break
+    #return ei,ds,gq
        
 #def create_phantom():
 def f2(t):
@@ -182,8 +197,8 @@ def f3C(t):
     return x,y,z
 
 def f3D(t):
-    x=np.linspace(0.3,0.4,len(t))
-    y=-np.linspace(0.3,0.4,len(t))    
+    x=np.linspace(0.4,0.5,len(t))
+    y=-np.linspace(0.4,0.5,len(t))    
     z=np.zeros(x.shape)
     return x,y,z
 
@@ -244,7 +259,7 @@ def create_phantom():
     del vol2    
     print 'creating second mask B'
     vol2=orbital_phantom(bvals=bvals,bvecs=bvecs,evals=np.array([0.0017,0.0001,0.0001]),func=f2,
-                         t=np.linspace(3*np.pi/2.-2*np.pi/8.,3*np.pi/2.-np.pi/8.,1000),datashape=(64,64,64,len(bvals)))  
+                         t=np.linspace(3*np.pi/2.-3*np.pi/8.,3*np.pi/2.-np.pi/4.,1000),datashape=(64,64,64,len(bvals)))  
     maskB=vol2[...,0]>0
     np.save('/tmp/maskB.npy',maskB)
     del vol2        
@@ -347,7 +362,7 @@ def mask_tracks_statistics(mask,ds,which):
     print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
     """    
     shape=(x,y,z)
-    print shape
+    #print shape
     tracksA=count_tracks_mask(tracks,shape,mask,1)        
     tracksB=count_tracks_mask(tracks,shape,mask,2)
     tracksC=count_tracks_mask(tracks,shape,mask,3)    
@@ -355,7 +370,40 @@ def mask_tracks_statistics(mask,ds,which):
     
     return tracks, tracksA, tracksB, tracksC, tracksD
     
+def track2rgb(track):
+    """Compute orientation of a track and retrieve and appropriate RGB
+    color to represent it.
+    """
+    # simplest implementation:
+    return orient2rgb(track[0] - track[-1])
     
+def compute_colors(tracks, alpha):
+    """Compute colors for a list of tracks.
+    """
+    assert(type(tracks)==type([]))
+    tot_vertices = np.sum([len(curve) for curve in tracks])
+    color = np.empty((tot_vertices,4), dtype='f4')
+    counter = 0
+    for curve in tracks:
+        color[counter:counter+len(curve),:3] = track2rgb(curve).astype('f4')
+        counter += len(curve)
+    color[:,3] = alpha
+    return color
+
+def show_tracks(tracks,alpha=1.,lw=2.,bg=(1.,1.,1.,1)): 
+    
+    colors=compute_colors(tracks,alpha=alpha)
+    ax = Line(tracks,colors,line_width=lw)
+    w=World()
+    w.add(ax)
+    wi = Window(caption=" Curve plotting (fos.me)",\
+            bgcolor=bg,width=1200,height=1000)
+    #(0,0.,0.2,1)
+    wi.attach(w)
+    wm = WindowManager()
+    wm.add(wi)
+    wm.run()
+ 
 
 if __name__ == '__main__':    
     
@@ -377,7 +425,7 @@ if __name__ == '__main__':
     #stop    
     visual=False
     save_odfs=False
-    no_seeds=200
+    no_seeds=2000
     final_name='/home/eg309/Data/orbital_phantoms/100.0_beauty'
     bvals=np.loadtxt('data/subj_01/101_32/raw.bval')
     bvecs=np.loadtxt('data/subj_01/101_32/raw.bvec').T   
@@ -417,34 +465,73 @@ if __name__ == '__main__':
     #MASK=np.zeros(FA.shape)
     #MASK=(FA>.5)&(FA<.8)
     #cleanup background
-    ds.PK[FA<.2]=np.zeros(5) 
+    ds.PK[FA<.2]=np.zeros(5)
     ei.PK[FA<.2]=np.zeros(5)
     gq.PK[FA<.2]=np.zeros(5)
-    #create random seeds
- 
-    #temp_save={'maskA':maskA,'maskB':maskB,'ds':tracks,'gq':tracks2,'ei':tracks3}    
-    #save_pickle('/tmp/temp_save',temp_save)
-    tracks,tracksA,tracksB,tracksC,tracksD=mask_tracks_statistics(mask,ei,4)
-
+    
+    """!Random seeds everywhere
+    #create random seeds    
+    x,y,z,g=ei.PK.shape
+    seeds=np.zeros((no_seeds,3))
+    sid=0
+    while sid<no_seeds:
+        rx=(x-1)*np.random.rand()
+        ry=(y-1)*np.random.rand()
+        rz=(z-1)*np.random.rand()
+        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
+        seeds[sid]=seed
+        sid+=1    
+    euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+    tracks = [track for track in euler]    
+    euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
+    tracks2 = [track for track in euler2]
+    euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+    tracks3 = [track for track in euler3]
+    """ 
+    
+    
     def tT(tracks,ind):
         return [tracks[i] for i in ind]
     
-    #"""
-    r=fvtk.ren()
     
-    if len(tracksA)>0:
-        fvtk.add(r,fvtk.line(tT(tracks,tracksA),fvtk.red))
-    if len(tracksB)>0:
-        fvtk.add(r,fvtk.line(tT(tracks,tracksB),fvtk.blue))
-    if len(tracksC)>0:
-        fvtk.add(r,fvtk.line(tT(tracks,tracksC),fvtk.green))
-    if len(tracksD)>0:
-        fvtk.add(r,fvtk.line(tT(tracks,tracksD),fvtk.yellow))
-    #fvtk.add(r,fvtk.point(seeds,fvtk.green))
-    #fvtk.add(r,fvtk.line(tracks3,fvtk.red))
-    fvtk.show(r)
-    #"""
-            
+    def pC(value):
+        return np.round(value*100,2)
+    
+    np.set_printoptions(precision=2) 
+     
+    #temp_save={'maskA':maskA,'maskB':maskB,'ds':tracks,'gq':tracks2,'ei':tracks3}    
+    #save_pickle('/tmp/temp_save',temp_save)
+    for i in range(1,5):
+        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,ei,i)        
+        if i==1:
+            dev=np.float(len(indsA))
+            print i,pC(len(indsB)/dev),pC(len(indsC)/dev),pC(len(indsD)/dev)
+        if i==2:
+            dev=np.float(len(indsB))
+            print i,pC(len(indsA)/dev),pC(len(indsC)/dev),pC(len(indsD)/dev)
+        if i==3:
+            dev=np.float(len(indsC))
+            print i,pC(len(indsA)/dev),pC(len(indsB)/dev),pC(len(indsD)/dev)
+        if i==4:
+            dev=np.float(len(indsD))
+            print i,pC(len(indsA)/dev),pC(len(indsB)/dev),pC(len(indsC)/dev)   
+        '''
+        r=fvtk.ren()    
+        r.SetBackground(1.,1.,1.)
+        if len(tracksA)>0:
+            fvtk.add(r,fvtk.line(tT(tracks,indsA),fvtk.red))
+        if len(tracksB)>0:
+            fvtk.add(r,fvtk.line(tT(tracks,indsB),fvtk.blue))
+        if len(tracksC)>0:
+            fvtk.add(r,fvtk.line(tT(tracks,indsC),fvtk.green))
+        if len(tracksD)>0:
+            fvtk.add(r,fvtk.line(tT(tracks,indsD),fvtk.yellow))
+        #fvtk.add(r,fvtk.point(seeds,fvtk.green))
+        #fvtk.add(r,fvtk.line(tracks3,fvtk.red))
+        fvtk.show(r)
+        '''
+    
+                
     #simplify
     #qb=QuickBundles(tracks,4,12)
     #virtuals=qb.virtuals()
@@ -452,7 +539,7 @@ if __name__ == '__main__':
     if visual:
         r=fvtk.ren()
         r.SetBackground(1.,1.,1.)
-        fvtk.add(r,fvtk.line(tracks,fvtk.red))
+        fvtk.add(r,fvtk.line(tracks,fvtk.red,linewidth=1.))
         fvtk.show(r)
         fvtk.clear(r)
         fvtk.add(r,fvtk.line(tracks2,fvtk.red,linewidth=1.))    

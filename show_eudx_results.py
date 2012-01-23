@@ -32,9 +32,13 @@ if __name__ == '__main__':
     T = dpr.read_tracks()
     dpr.close()
     
+    #center
+    shift=(np.array(data.shape)-1)/2.    
+    T=[t-shift for t in T]
+    
     #load initial QuickBundles with threshold 30mm
     #fpkl = 'data/subj_05/101_32/DTI/qb_gqi_1M_linear_30.pkl'
-    qb=QuickBundles(T,30.,12)    
+    qb=QuickBundles(T,30.,20)    
     #qb=load_pickle(fpkl)
         
     #create the interaction system for tracks 
@@ -49,7 +53,7 @@ if __name__ == '__main__':
     #add the actors to the world    
     w=World()
     w.add(tl)
-    #w.add(sl)
+    w.add(sl)
     w.add(ax)
     #create a window
     wi = Window(caption="Interactive Spaghetti using Diffusion Imaging in Python (dipy.org) and Free On Shades (fos.me)",\
