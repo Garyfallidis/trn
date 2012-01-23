@@ -29,6 +29,33 @@ def transform_tracks(tracks,affine):
 def lengths(tracks):    
     return [length(t) for t in tracks]
 
+def analyze_humans():
+    dirname = "data/"
+    for root, dirs, files in os.walk(dirname):
+        if root.endswith('101_32'):
+            
+            base_dir = root+'/'
+            filename = 'raw'                        
+            dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
+            print dpy_filename
+            dpr_linear = Dpy(dpy_filename, 'r')
+            tensor_linear=dpr_linear.read_tracks()
+            dpr_linear.close()
+            
+            pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
+            save_pickle(pkl_filename,lengths(tensor_tracks))
+            
+            """          
+            print 'save lengths'
+            pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
+            load_pickle(pkl_filename,lengths(ei_tracks))
+            pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
+            load_pickle(pkl_filename,lengths(gq_tracks))
+            pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
+            ds_tracks=load_pickle(pkl_filename,lengths(ds_tracks))
+            """
+
+
 def humans():   
 
     no_seeds=10**6
