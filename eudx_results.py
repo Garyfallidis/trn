@@ -39,7 +39,7 @@ def analyze_humans():
             dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
             print dpy_filename
             dpr_linear = Dpy(dpy_filename, 'r')
-            tensor_linear=dpr_linear.read_tracks()
+            tensor_tracks=dpr_linear.read_tracks()
             dpr_linear.close()
             
             pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
