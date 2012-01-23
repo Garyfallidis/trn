@@ -54,6 +54,8 @@ def analyze_humans():
              
             d=np.zeros(6)
             p=np.zeros(6)
+            
+            np.set_printoptions(3)
                        
             d[0],p[0]=ks_2samp(dt_lengths,ei_lengths)
             d[1],p[1]=ks_2samp(dt_lengths,ds_lengths)
@@ -61,9 +63,12 @@ def analyze_humans():
             d[3],p[3]=ks_2samp(ei_lengths,ds_lengths)
             d[4],p[4]=ks_2samp(ei_lengths,gq_lengths)
             d[5],p[5]=ks_2samp(ds_lengths,gq_lengths)
-            
+                       
             print 'KS statistic ',d,'P-value ',p
             
+            print np.median(dt_lengths),np.median(ei_lengths),\
+                    np.median(ds_lengths),np.median(gq_lengths)
+                    
 
 
 def humans():   
