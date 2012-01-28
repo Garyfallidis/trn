@@ -21,55 +21,20 @@ from dipy.io.pickles import load_pickle,save_pickle
 from dipy.tracking.vox2track import track_counts
 from dipy.viz.colormap import orient2rgb
 from dipy.tracking.metrics import length
-
 from scipy.stats import ks_2samp
+
 
 def transform_tracks(tracks,affine):
         return [(np.dot(affine[:3,:3],t.T).T + affine[:3,3]) for t in tracks]
 
 def lengths(tracks):    
     return [length(t) for t in tracks]
-
-def analyze_humans():
-    dirname = "data/"
-    for root, dirs, files in os.walk(dirname):
-        if root.endswith('101_32'):
-            
-            base_dir = root+'/'
-            #filename = 'raw'                        
-            #dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
-            #print dpy_filename
-            #dpr_linear = Dpy(dpy_filename, 'r')
-            #tensor_tracks=dpr_linear.read_tracks()
-            #dpr_linear.close()
-            
-            pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
-            dt_lengths=load_pickle(pkl_filename)
-            pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
-            ei_lengths=load_pickle(pkl_filename)
-            pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
-            gq_lengths=load_pickle(pkl_filename)
-            pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
-            ds_lengths=load_pickle(pkl_filename)
-             
-            d=np.zeros(6)
-            p=np.zeros(6)
-            
-            np.set_printoptions(3)
-                       
-            d[0],p[0]=ks_2samp(dt_lengths,ei_lengths)
-            d[1],p[1]=ks_2samp(dt_lengths,ds_lengths)
-            d[2],p[2]=ks_2samp(dt_lengths,gq_lengths)
-            d[3],p[3]=ks_2samp(ei_lengths,ds_lengths)
-            d[4],p[4]=ks_2samp(ei_lengths,gq_lengths)
-            d[5],p[5]=ks_2samp(ds_lengths,gq_lengths)
-                       
-            print 'KS statistic ',d,'P-value ',p
-            
-            print np.median(dt_lengths),np.median(ei_lengths),\
-                    np.median(ds_lengths),np.median(gq_lengths)
-                    
-
+                
+def center_tracks(tracks):    
+    tracks2=np.concatenate(tracks)
+    center=np.mean(tracks2,axis=0)
+    del tracks2
+    return [t-center for t in tracks]
 
 def humans():   
 
@@ -101,10 +66,7 @@ def humans():
             gradients = np.loadtxt(bvec_filename).T # this is the unitary direction of the gradient
             
             tensors = Tensor(data, bvals, gradients, thresh=50)
-            FA = tensors.fa()
-            euler = EuDX(a=FA, ind=tensors.ind(), seeds=no_seeds, a_low=.2)
-            tensor_tracks = [track for track in euler]    
-                        
+            FA = tensors.fa()                       
             FA = tensors.fa()
             famask=FA>=.2
             
@@ -132,14 +94,16 @@ def humans():
                 seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
                 seeds[sid]=seed
                 sid+=1
-                        
-            euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
-            ds_tracks = [track for track in euler]    
-            euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
-            gq_tracks = [track for track in euler2]
-            euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
-            ei_tracks = [track for track in euler3]
-                    
+            
+            euler = EuDX(a=FA, ind=tensors.ind(), seeds=seeds, a_low=.2)
+            dt_tracks = [track for track in euler]                                    
+            euler2 = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+            ds_tracks = [track for track in euler2]    
+            euler3 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
+            gq_tracks = [track for track in euler3]
+            euler4 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
+            ei_tracks = [track for track in euler4]
+            
             if visualize:
                 renderer = fvtk.ren()
                 fvtk.add(renderer, fvtk.line(tensor_tracks, fvtk.red, opacity=1.0))
@@ -153,16 +117,16 @@ def humans():
             del img_ref
             
             print 'transform the tracks'
-            tensor_linear = transform_tracks(tensor_tracks,mat)
+            dt_linear = transform_tracks(dt_tracks,mat)
             ds_linear = transform_tracks(ds_tracks,mat)
             gq_linear = transform_tracks(gq_tracks,mat)
             ei_linear = transform_tracks(ei_tracks,mat)
                         
             print 'save tensor tracks'
-            dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
+            dpy_filename = base_dir + 'DTI/dt_linear.dpy'
             print dpy_filename
             dpr_linear = Dpy(dpy_filename, 'w')
-            dpr_linear.write_tracks(tensor_linear)
+            dpr_linear.write_tracks(dt_linear)
             dpr_linear.close()
             
             print 'save ei tracks'
@@ -187,12 +151,14 @@ def humans():
             dpr_linear.close()
             
             print 'save lengths'
+            pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
+            save_pickle(pkl_filename,lengths(dt_linear))            
             pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
-            save_pickle(pkl_filename,lengths(ei_tracks))
+            save_pickle(pkl_filename,lengths(ei_linear))
             pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
-            save_pickle(pkl_filename,lengths(gq_tracks))
+            save_pickle(pkl_filename,lengths(gq_linear))
             pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
-            save_pickle(pkl_filename,lengths(ds_tracks))
+            save_pickle(pkl_filename,lengths(ds_linear))
             
             #save tracks_warped_linear
             #dpy_filename = base_dir + 'gqi_linear.dpy'
@@ -378,39 +344,6 @@ def stats_count_tracks_mask(tracks,shape,maskA,maskB,maskC,maskD):
     lens=(len(tracksA),len(tracksB),len(tracksC),len(tracksD))
     return lens,(tracksA,tracksB,tracksC,tracksD)
 
-def mask_tracks_statistics(mask,ds,which):    
-    x,y,z,g=ei.PK.shape
-    #mask2=np.zeros(mask.shape)
-    #create seeds in mask A
-    seeds=np.zeros((no_seeds,3))
-    sid=0
-    while sid<no_seeds:
-        rx=(x-1)*np.random.rand()
-        ry=(y-1)*np.random.rand()
-        rz=(z-1)*np.random.rand()
-        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
-        if mask[tuple(np.floor(seed+0.5))]==which:
-            #mask2[tuple(np.floor(seed+0.5))]=2
-            seeds[sid]=seed
-            sid+=1
-    #euler integration
-    euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
-    tracks = [track for track in euler]
-    """
-    euler2 = EuDX(a=gq.PK, ind=gq.IN, seeds=seeds, odf_vertices=gq.odf_vertices, a_low=.2)
-    tracks2 = [track for track in euler2]
-    euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
-    tracks3 = [track for track in euler3]    
-    print 'ds',len(tracks),'gq',len(tracks2),'ei',len(tracks3)
-    """    
-    shape=(x,y,z)
-    #print shape
-    tracksA=count_tracks_mask(tracks,shape,mask,1)        
-    tracksB=count_tracks_mask(tracks,shape,mask,2)
-    tracksC=count_tracks_mask(tracks,shape,mask,3)    
-    tracksD=count_tracks_mask(tracks,shape,mask,4)
-    
-    return tracks, tracksA, tracksB, tracksC, tracksD
     
 def track2rgb(track):
     """Compute orientation of a track and retrieve and appropriate RGB
@@ -447,7 +380,66 @@ def show_tracks(tracks,alpha=1.,lw=2.,bg=(1.,1.,1.,1)):
     wm.run()
  
 
-if __name__ == '__main__':    
+    
+
+    
+def analyze_humans():
+    #if __name__ == '__main__':
+    
+    dirname = "data/"
+    for root, dirs, files in os.walk(dirname):
+        if root.endswith('101_32'):
+            
+            base_dir = root+'/'
+            #filename = 'raw'                        
+            #dpy_filename = base_dir + 'DTI/tensor_linear.dpy'
+            #print dpy_filename
+            #dpr_linear = Dpy(dpy_filename, 'r')
+            #tensor_tracks=dpr_linear.read_tracks()
+            #dpr_linear.close()            
+            pkl_filename = base_dir + 'DTI/dt_lengths.pkl'
+            dt_lengths=load_pickle(pkl_filename)
+            pkl_filename = base_dir + 'DTI/ei_lengths.pkl'
+            ei_lengths=load_pickle(pkl_filename)
+            pkl_filename = base_dir + 'DTI/gq_lengths.pkl'
+            gq_lengths=load_pickle(pkl_filename)
+            pkl_filename = base_dir + 'DTI/ds_lengths.pkl'
+            ds_lengths=load_pickle(pkl_filename)             
+            d=np.zeros(6)
+            p=np.zeros(6)            
+            np.set_printoptions(3)                       
+            d[0],p[0]=ks_2samp(dt_lengths,ei_lengths)
+            d[1],p[1]=ks_2samp(dt_lengths,ds_lengths)
+            d[2],p[2]=ks_2samp(dt_lengths,gq_lengths)
+            d[3],p[3]=ks_2samp(ei_lengths,ds_lengths)
+            d[4],p[4]=ks_2samp(ei_lengths,gq_lengths)
+            d[5],p[5]=ks_2samp(ds_lengths,gq_lengths)                       
+            print 'KS statistic ',d,'P-value ',p            
+            print np.median(dt_lengths),np.median(ei_lengths),\
+                    np.median(ds_lengths),np.median(gq_lengths)            
+            #break
+            stop    
+
+def mask_tracks_statistics(mask,shape,seeds,ds,which):    
+    
+    try:
+        euler = EuDX(a=ds.PK, ind=ds.IN, seeds=seeds, odf_vertices=ds.odf_vertices, a_low=.2)
+        tracks = [track for track in euler]
+    except AttributeError:
+        euler = EuDX(a=ds.fa(), ind=ds.ind(), seeds=seeds, a_low=.2)        
+        tracks = [track for track in euler]      
+    
+    #print shape
+    tracksA=count_tracks_mask(tracks,shape,mask,1)        
+    tracksB=count_tracks_mask(tracks,shape,mask,2)
+    tracksC=count_tracks_mask(tracks,shape,mask,3)    
+    tracksD=count_tracks_mask(tracks,shape,mask,4)
+    
+    return tracks, tracksA, tracksB, tracksC, tracksD
+
+
+if __name__=='__main__':
+    #def analyze_phantom():    
     
     #create_phantom()
     
@@ -463,6 +455,7 @@ if __name__ == '__main__':
     maskD[maskD>0]=4
     #Create a single mask
     mask=maskA+maskB+maskC+maskD    
+        
     #A=np.ones((4,4,4,102)) 
     #stop    
     visual=False
@@ -530,21 +523,38 @@ if __name__ == '__main__':
     euler3 = EuDX(a=ei.PK, ind=ei.IN, seeds=seeds, odf_vertices=ei.odf_vertices, a_low=.2)
     tracks3 = [track for track in euler3]
     """ 
-    
-    
+        
     def tT(tracks,ind):
-        return [tracks[i] for i in ind]
-    
-    
+        return [tracks[i] for i in ind]   
     def pC(value):
         return np.round(value*100,2)
     
     np.set_printoptions(precision=2) 
-     
-    #temp_save={'maskA':maskA,'maskB':maskB,'ds':tracks,'gq':tracks2,'ei':tracks3}    
-    #save_pickle('/tmp/temp_save',temp_save)
-    for i in range(1,5):
-        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,ei,i)        
+        
+    def create_seeds(shape,no_seeds,mask,which):
+        x,y,z=shape
+        #mask2=np.zeros(mask.shape)
+        #create seeds in mask A
+        seeds=np.zeros((no_seeds,3))
+        sid=0
+        while sid<no_seeds:
+            rx=(x-1)*np.random.rand()
+            ry=(y-1)*np.random.rand()
+            rz=(z-1)*np.random.rand()
+            seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
+            if mask[tuple(np.floor(seed+0.5))]==which:
+                #mask2[tuple(np.floor(seed+0.5))]=2
+                seeds[sid]=seed
+                sid+=1
+        return seeds
+    
+    shape=ei.PK.shape[:3]
+    seeds1=create_seeds(shape,no_seeds,mask,1)
+    seeds2=create_seeds(shape,no_seeds,mask,2)
+    seeds3=create_seeds(shape,no_seeds,mask,3)
+    seeds4=create_seeds(shape,no_seeds,mask,4)
+    
+    def count_inds(i,indsA,indsB,indsC,indsD):
         if i==1:
             dev=np.float(len(indsA))
             print i,pC(len(indsB)/dev),pC(len(indsC)/dev),pC(len(indsD)/dev)
@@ -556,7 +566,28 @@ if __name__ == '__main__':
             print i,pC(len(indsA)/dev),pC(len(indsB)/dev),pC(len(indsD)/dev)
         if i==4:
             dev=np.float(len(indsD))
-            print i,pC(len(indsA)/dev),pC(len(indsB)/dev),pC(len(indsC)/dev)   
+            print i,pC(len(indsA)/dev),pC(len(indsB)/dev),pC(len(indsC)/dev) 
+    
+    stop
+    
+    for (i,seeds) in enumerate([seeds1,seeds2,seeds3,seeds4]):
+        
+        print i+1, ' Tensors ',len(seeds)
+        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,shape,seeds,tensors,i+1)
+        count_inds(i+1,indsA,indsB,indsC,indsD)
+        
+        print i+1, ' EITL ',len(seeds)
+        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,shape,seeds,ei,i+1)
+        count_inds(i+1,indsA,indsB,indsC,indsD)
+        
+        print i+1, ' DSI ',len(seeds)
+        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,shape,seeds,ds,i+1)
+        count_inds(i+1,indsA,indsB,indsC,indsD)
+        
+        print i+1, ' GQI ',len(seeds)
+        tracks,indsA,indsB,indsC,indsD=mask_tracks_statistics(mask,shape,seeds,gq,i+1)
+        count_inds(i+1,indsA,indsB,indsC,indsD)
+              
         '''
         r=fvtk.ren()    
         r.SetBackground(1.,1.,1.)
@@ -589,4 +620,5 @@ if __name__ == '__main__':
         fvtk.clear(r)
         fvtk.add(r,fvtk.line(tracks3,fvtk.red,linewidth=1.)) 
         fvtk.show(r)
-    
+
+

@@ -18,15 +18,16 @@ import copy
 
 
 if __name__ == '__main__':
-
     
+    subject='05'
+        
     #load T1 volume registered in MNI space    
     #img = nib.load('data/subj_05/MPRAGE_32/T1_flirt_out.nii.gz')
-    img = nib.load('data/subj_03/MPRAGE_32/T1_flirt_out.nii.gz')
+    img = nib.load('data/subj_'+subject+'/MPRAGE_32/T1_flirt_out.nii.gz')
     data = img.get_data()
     affine = img.get_affine()    
     #load the tracks registered in MNI space
-    fdpyw = 'data/subj_03/101_32/DTI/ei_linear.dpy' 
+    fdpyw = 'data/subj_'+subject+'/101_32/DTI/ei_linear.dpy' 
     #fdpyw = 'data/subj_05/101_32/DTI/tracks_gqi_1M_linear.dpy'    
     dpr = Dpy(fdpyw, 'r')
     T = dpr.read_tracks()
