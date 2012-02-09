@@ -24,6 +24,8 @@ if __name__ == '__main__':
     bvecs[np.isnan(bvecs)]=0
     #project identical b-vectors to the other hemisphere
     bvecs2,pairs=project_hemisph_bvecs(bvals,bvecs)
+    
+    #stop
     #get voxel size
     zooms=np.sqrt(np.sum(affine[:3,:3]**2,axis=0))
     nzooms=(zooms[0],zooms[0],zooms[0])
