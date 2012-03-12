@@ -197,11 +197,10 @@ def unpackopt3(xopt):
 
 def load_data(test,type,snr):
 
-    if test==False:
-        fname='/home/eg309/Software/Hardi/Training_3D_SF__SNR='+snr+'__SIGNAL.mat'
-    if test==True:
-        fname='/home/eg309/Software/Hardi/TestData/'+\
-        'Testing_'+type+'__SNR='+snr+'__SIGNAL.mat'
+    if test=='train':
+        fname='/home/eg309/Software/Hardi/Training_'+type+'__SNR='+snr+'__SIGNAL.mat'
+    if test=='test':
+        fname='/home/eg309/Software/Hardi/TestData/Testing_'+type+'__SNR='+snr+'__SIGNAL.mat'
 
     fgrads='/home/eg309/Software/Hardi/gradient_list_257_clean.txt'
     fvertices='/home/eg309/Software/Hardi/TrainingData/ODF_XYZ.mat'
@@ -235,87 +234,109 @@ def load_data(test,type,snr):
 
     return data,bvals,bvecs,odf_sphere
 
-data,bvals,bvecs,odf_sphere=load_data(True,'IV','30')
+def dump():
 
-#stop
-data=data[:,4:10,:,:]
-
-#ten
-ten = Tensor(100*data, bvals, bvecs)
-FA = ten.fa()
-famask=FA>=.2
-
-#GQI
-gqs=GeneralizedQSampling(data,bvals,bvecs,3.,
+    """
+    #EIT
+    ei=EquatorialInversion(data,bvals,bvecs,
                 odf_sphere=odf_sphere,
                 mask=None,
-                squared=True,
+                half_sphere_grads=False,
+                auto=False,
+                save_odfs=True,
+                fast=True)
+
+    ei.radius=np.arange(0,5,0.2)
+    ei.gaussian_weight=0.02
+    ei.set_operator('laplap')#laplacian
+    ei.update()
+    ei.fit() 
+
+    #DSI
+    ds=DiffusionSpectrum(data,bvals,bvecs,            
+                odf_sphere=odf_sphere,
+                mask=None,
+                half_sphere_grads=False,
                 save_odfs=True)
-"""
-#EIT
-ei=EquatorialInversion(data,bvals,bvecs,
-            odf_sphere=odf_sphere,
-            mask=None,
-            half_sphere_grads=False,
-            auto=False,
-            save_odfs=True,
-            fast=True)
-
-ei.radius=np.arange(0,5,0.2)
-ei.gaussian_weight=0.02
-ei.set_operator('laplap')#laplacian
-ei.update()
-ei.fit() 
-
-#DSI
-ds=DiffusionSpectrum(data,bvals,bvecs,            
-            odf_sphere=odf_sphere,
-            mask=None,
-            half_sphere_grads=False,
-            save_odfs=True)
-"""
-
-qg=gqs
-
-#show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
-
-PK=qg.PK
-IN=qg.IN
-
-M=count_peaks(PK)
-
-for index in np.ndindex(M.shape):
-    print index
-    if M[index]==1:
-        mf=[1.]
-        mevals=ten[index].evals
-        mevecs=ten[index].evecs
-    if M[index]==2:
-        pass
-    if M[index]==3:
-        pass
-
-e0=qg.odf_vertices[np.int(qg.IN[0,4,0,0])]
-e1=qg.odf_vertices[np.int(qg.IN[0,4,0,1])]
-
-mf=[0.7,0.3]
-mevals=np.array([[1.5,0.2,0.2],[1.2,0.2,0.2]])*10**(-3)
-mevecs=[all_evecs(e0),all_evecs(e1)]
-S=MultiTensor(bvals,bvecs,1.,mf,mevals,mevecs)
-odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
-
-signal = S
-
-t0=time()
-xopt=fmin_powell(opt2,\
-        [0.5,0.5,0.5,0.5,0.5],\
-        (bvals,bvecs,signal,mevecs),\
-        xtol=10**(-6),\
-        ftol=10**(-6),\
-        maxiter=10**6,\
-        disp=True)
-t1=time()
-print t1-t0
-print xopt
+    """
+    pass
 
 
+def analyze_peaks(data,ten,qg):
+
+    PK=qg.PK
+    IN=qg.IN
+
+    M=count_peaks(PK)
+
+    R={}
+
+    for index in np.ndindex(M.shape):
+        print index, M[index]
+        if M[index]==1:
+            mf=[1.]
+            mevals=[ten[index].evals]
+            mevecs=[ten[index].evecs]
+        if M[index]==2:
+            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
+            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
+            signal = data[index]
+            mevecs=[all_evecs(e0),all_evecs(e1)]
+            xopt=fmin_powell(opt2,\
+            [0.5,0.5,0.5,0.5,0.5],\
+            (bvals,bvecs,signal,mevecs),\
+            xtol=10**(-6),\
+            ftol=10**(-6),\
+            maxiter=10**6,\
+            disp=False)
+            mf,mevals=unpackopt2(xopt)
+        if M[index]==3:
+            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
+            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
+            e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
+            signal = data[index]
+            mevecs=[all_evecs(e0),all_evecs(e1),all_evecs(e2)]
+            xopt=fmin_powell(opt2,\
+            [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],\
+            (bvals,bvecs,signal,mevecs),\
+            xtol=10**(-6),\
+            ftol=10**(-6),\
+            maxiter=10**6,\
+            disp=False)
+            mf,mevals=unpackopt3(xopt)        
+        odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
+        R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
+
+    return M,R
+    
+def show_no_fibs(M,R):
+
+    for index in np.ndindex(M.shape):
+        print index
+        print R[index]['m']
+
+
+
+if __name__ == '__main__':
+
+    data,bvals,bvecs,odf_sphere=load_data('train','SF','30')
+
+    #data=data[:,4:10,:,:]
+
+    #ten
+    ten = Tensor(100*data, bvals, bvecs)
+    FA = ten.fa()
+    famask=FA>=.2
+
+    #GQI
+    gqs=GeneralizedQSampling(data,bvals,bvecs,4.5,
+                    odf_sphere=odf_sphere,
+                    mask=None,
+                    squared=True,
+                    save_odfs=True)
+
+    qg=gqs
+
+    #M,R=analyze_peaks(data,ten,qg)
+    
+    show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
