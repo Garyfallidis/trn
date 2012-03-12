@@ -302,7 +302,7 @@ def analyze_peaks(data,ten,qg):
             xtol=10**(-6),\
             ftol=10**(-6),\
             maxiter=10**6,\
-            disp=False)
+            disp=True)
             mf,mevals=unpackopt3(xopt)        
         odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
         R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
@@ -310,17 +310,25 @@ def analyze_peaks(data,ten,qg):
     return M,R
     
 def show_no_fibs(M,R):
-
     for index in np.ndindex(M.shape):
         print index
         print R[index]['m']
 
+def get_all_odfs(M,R,sphsize):
+    ODF=np.zeros(M.shape+(sphsize,))
+    for index in np.ndindex(M.shape):
+        ODF[index]=R[index]['odf']
+    return ODF
 
+def save_for_mat(M,R):
+    pass
 
 if __name__ == '__main__':
 
-    data,bvals,bvecs,odf_sphere=load_data('train','SF','30')
+    data,bvals,bvecs,odf_sphere=load_data('train','SF','30')#'3D_SF'
 
+    data=data[4,5,0]
+    data=data[None,None,None,:]
     #data=data[:,4:10,:,:]
 
     #ten
@@ -329,14 +337,20 @@ if __name__ == '__main__':
     famask=FA>=.2
 
     #GQI
-    gqs=GeneralizedQSampling(data,bvals,bvecs,4.5,
+    gqs=GeneralizedQSampling(data,bvals,bvecs,3.,
                     odf_sphere=odf_sphere,
                     mask=None,
                     squared=True,
+                    auto=False,
                     save_odfs=True)
-
+    gqs.peak_thr=0.5
+    gqs.fit()
+    gqs.ODF[gqs.ODF<0]=0.
+    #manipulate
     qg=gqs
-
-    #M,R=analyze_peaks(data,ten,qg)
-    
+    #t0=time()
+    M,R=analyze_peaks(data,ten,qg)    
+    #t1=time()
+    #print 'took ',t1-t0,'.s'
     show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+
