@@ -72,8 +72,8 @@ def ODF(vecs,mf,mevals,mevecs):
     return odf
 
 def lambda_ranges():
-    print 'max', 1*10**(-3),'to',2*10**(-3)
-    print 'other', 0.1*10**(-3),'to',0.6*10**(-3)
+    #print 'max', 1*10**(-3),'to',2*10**(-3)
+    #print 'other', 0.1*10**(-3),'to',0.6*10**(-3)
     lmin=np.linspace(0.1,0.6,10)*10**(-3)
     lmax=np.linspace(1,2,10)*10**(-3)
     f=np.linspace(0.1,1,10)
@@ -279,21 +279,29 @@ def get_all_odfs(M,R,sphsize):
 def save_for_mat(M,R):
     pass
 
+def revised_peak_no(odf,odf_faces,peak_thr):
+    peaks,inds=peak_finding(odf,odf_faces)
+    ibigp=np.where(peaks>peak_thr*peaks[0])[0]
+    l=len(ibigp)                
+    if l>3:
+        l=3               
+    if l==0:
+        return np.sum(peaks[l]/np.float(peaks[0])>0)                         
+    if l>0:                    
+        return np.sum(peaks[:l]/np.float(peaks[0])>0)
+
+
 if __name__ == '__main__':
 
-    stop
-
     data,bvals,bvecs,odf_sphere=load_data('train','SF','30')#'3D_SF'
-
+    #reduce
     data=data[4,5,0]
     data=data[None,None,None,:]
     #data=data[:,4:10,:,:]
-
     #ten
     ten = Tensor(100*data, bvals, bvecs)
     FA = ten.fa()
     famask=FA>=.2
-
     #GQI
     gqs=GeneralizedQSampling(data,bvals,bvecs,3.,
                     odf_sphere=odf_sphere,
@@ -306,9 +314,66 @@ if __name__ == '__main__':
     gqs.ODF[gqs.ODF<0]=0.
     #manipulate
     qg=gqs
+    #get peaks    
+    PK=qg.PK
+    IN=qg.IN
+    M=count_peaks(PK)
+    #lambda ranges
+    lmax,lmin,fs=lambda_ranges()
+    signal=data.squeeze()
+    index=(0,0,0)
+    e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
+    e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
+    e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
+    mevecs=[all_evecs(e0),all_evecs(e1),all_evecs(e2)]
+    me0=[all_evecs(e0)]
+    """
+    res=[]
+    pars=[]
+    for (i,lx) in enumerate(lmax):
+        for (j,lm) in enumerate(lmin):
+            for (k,f) in enumerate(fs):
+                S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me0)
+                odf=gqs.odf(S)
+                if revised_peak_no(np.abs(qg.ODF[index]-odf),qg.odf_faces,0.5)==2:
+                    res.append(np.sum(np.sqrt((qg.ODF[index]-odf)**2)))
+                    pars.append([i,j,k])
+                #print res[-1]
+    ires=np.argmax(res)
+    lx=lmax[pars[ires][0]]
+    lm=lmin[pars[ires][1]]
+    f=fs[pars[ires][2]]
+    """
+
+    
+
+    S=MultiTensor(bvals,bvecs,S0=1.,mf=[1.],mevals=[[0.002,0.0006,0.0006]],mevecs=me0)
+    #S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me0)
+    data2=data.copy()
+    data2[index]=S#data[index]-S
+    gqs2=GeneralizedQSampling(data2,bvals,bvecs,3.,
+                    odf_sphere=odf_sphere,
+                    mask=None,
+                    squared=True,
+                    auto=False,
+                    save_odfs=True)
+    gqs2.peak_thr=0.5
+    gqs2.fit()
+
+    #gqs2.ODF[gqs.ODF<0]=0.
+
+    ODFs=np.zeros((2,len(qg.odf_vertices)))
+    #qg.ODF[index][55]=2.
+
+    ODFs[0]=qg.ODF[index]
+    ODFs[1]=gqs2.ODF[index]
+
     #t0=time()
-    M,R=analyze_peaks(data,ten,qg)    
+    #M,R=analyze_peaks(data,ten,qg)    
     #t1=time()
     #print 'took ',t1-t0,'.s'
-    show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    #show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    #show_blobs(gqs2.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+
+    show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
 
