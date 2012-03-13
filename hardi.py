@@ -275,7 +275,7 @@ def revised_peak_no(odf,odf_faces,peak_thr):
     if l>0:                    
         return np.sum(peaks[:l]/np.float(peaks[0])>0)
 
-def decouple(bvals,bvecs,me,index,pk_no=3):
+def decouple(data,bvals,bvecs,qg,me,index,pk_no=3):
 
     lmax,lmin,fs=lambda_ranges()
     #"""
@@ -287,7 +287,7 @@ def decouple(bvals,bvecs,me,index,pk_no=3):
                 S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me)
                 odf=gqs.odf(S)
                 if revised_peak_no(np.abs(qg.ODF[index]-odf),qg.odf_faces,0.5)==pk_no-1:
-                    res.append(np.sum(np.sqrt((qg.ODF[index]-odf)**2)))
+                    res.append(np.sum(np.sqrt((data-S)**2)))
                     pars.append([i,j,k])
                 #print res[-1]
     ires=np.argmax(res)
@@ -315,7 +315,7 @@ def odf2MT(data,ten,qg):
             mf=np.zeros(2)
             mevals=np.zeros((3,3))            
             for i in range(2):
-                f,lx,lm=decouple(bvals,bvecs,mevecs[i],index,pk_no=2)
+                f,lx,lm=decouple(data,bvals,bvecs,qg,mevecs[i],index,pk_no=2)
                 mf[i]=f
                 mevals[i]=np.array([lx,lm,lm])
         if M[index]==3:
@@ -327,14 +327,12 @@ def odf2MT(data,ten,qg):
             mf=np.zeros(3)
             mevals=np.zeros((3,3))            
             for i in range(3):
-                f,lx,lm=decouple(bvals,bvecs,mevecs[i],index,pk_no=3)
+                f,lx,lm=decouple(data,bvals,bvecs,qg,mevecs[i],index,pk_no=3)
                 mf[i]=f
                 mevals[i]=np.array([lx,lm,lm])
         odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
         R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
     return M,R
-
-
 
 
 if __name__ == '__main__':
