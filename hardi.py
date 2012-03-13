@@ -100,18 +100,6 @@ def opt2(params,bvals,bvecs,signal,mevecs):
     S=MultiTensor(bvals,bvecs,1.,mf,mevals,mevecs)
     return np.sum(np.sqrt((S-signal)**2))
 
-def opt2lsq(params,bvals,bvecs,signal,mevecs):
-    mf=[params[0],1-params[0]]
-    mevals=np.zeros((2,3))
-    mevals[0,0]=params[1]
-    mevals[0,1:]=params[2]
-    mevals[1,0]=params[3]
-    mevals[1,1:]=params[4]
-    mevals=mevals*10**(-3)
-    S=MultiTensor(bvals,bvecs,1.,mf,mevals,mevecs)
-    #return np.sum(np.sqrt((S-signal)**2))
-    return S-signal
-
 def opt3(params,bvals,bvecs,signal,mevecs):
     mf=[params[0],params[1],1-params[0]-params[1]]
     mevals=np.zeros((3,3))
@@ -222,11 +210,8 @@ def analyze_peaks(data,ten,qg):
 
     PK=qg.PK
     IN=qg.IN
-
     M=count_peaks(PK)
-
     R={}
-
     for index in np.ndindex(M.shape):
         print index, M[index]
         if M[index]==1:
@@ -237,7 +222,7 @@ def analyze_peaks(data,ten,qg):
             e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
             e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
             signal = data[index]
-            mevecs=[all_evecs(e0),all_evecs(e1)]
+            mevecs=[all_evecs(e0).T,all_evecs(e1).T]
             xopt=fmin_powell(opt2,\
             [0.5,0.5,0.5,0.5,0.5],\
             (bvals,bvecs,signal,mevecs),\
@@ -251,7 +236,7 @@ def analyze_peaks(data,ten,qg):
             e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
             e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
             signal = data[index]
-            mevecs=[all_evecs(e0),all_evecs(e1),all_evecs(e2)]
+            mevecs=[all_evecs(e0).T,all_evecs(e1).T,all_evecs(e2).T]
             xopt=fmin_powell(opt2,\
             [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],\
             (bvals,bvecs,signal,mevecs),\
@@ -290,6 +275,67 @@ def revised_peak_no(odf,odf_faces,peak_thr):
     if l>0:                    
         return np.sum(peaks[:l]/np.float(peaks[0])>0)
 
+def decouple(bvals,bvecs,me,index,pk_no=3):
+
+    lmax,lmin,fs=lambda_ranges()
+    #"""
+    res=[]
+    pars=[]
+    for (i,lx) in enumerate(lmax):
+        for (j,lm) in enumerate(lmin):
+            for (k,f) in enumerate(fs):
+                S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me)
+                odf=gqs.odf(S)
+                if revised_peak_no(np.abs(qg.ODF[index]-odf),qg.odf_faces,0.5)==pk_no-1:
+                    res.append(np.sum(np.sqrt((qg.ODF[index]-odf)**2)))
+                    pars.append([i,j,k])
+                #print res[-1]
+    ires=np.argmax(res)
+    lx=lmax[pars[ires][0]]
+    lm=lmin[pars[ires][1]]
+    f=fs[pars[ires][2]]
+    return f,lx,lm
+
+def odf2MT(data,ten,qg):
+    PK=qg.PK
+    IN=qg.IN
+    M=count_peaks(PK)
+    R={}
+    for index in np.ndindex(M.shape):
+        print index, M[index]
+        if M[index]==1:
+            mf=[1.]
+            mevals=[ten[index].evals]
+            mevecs=[ten[index].evecs]
+        if M[index]==2:
+            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
+            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
+            signal = data[index]
+            mevecs=[all_evecs(e0).T,all_evecs(e1).T]
+            mf=np.zeros(2)
+            mevals=np.zeros((3,3))            
+            for i in range(2):
+                f,lx,lm=decouple(bvals,bvecs,mevecs[i],index,pk_no=2)
+                mf[i]=f
+                mevals[i]=np.array([lx,lm,lm])
+        if M[index]==3:
+            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
+            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
+            e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
+            signal = data[index]
+            mevecs=[all_evecs(e0).T,all_evecs(e1).T,all_evecs(e2).T]   
+            mf=np.zeros(3)
+            mevals=np.zeros((3,3))            
+            for i in range(3):
+                f,lx,lm=decouple(bvals,bvecs,mevecs[i],index,pk_no=3)
+                mf[i]=f
+                mevals[i]=np.array([lx,lm,lm])
+        odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
+        R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
+    return M,R
+
+
+
 
 if __name__ == '__main__':
 
@@ -321,59 +367,17 @@ if __name__ == '__main__':
     #lambda ranges
     lmax,lmin,fs=lambda_ranges()
     signal=data.squeeze()
-    index=(0,0,0)
-    e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
-    e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
-    e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
-    mevecs=[all_evecs(e0),all_evecs(e1),all_evecs(e2)]
-    me0=[all_evecs(e0)]
-    """
-    res=[]
-    pars=[]
-    for (i,lx) in enumerate(lmax):
-        for (j,lm) in enumerate(lmin):
-            for (k,f) in enumerate(fs):
-                S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me0)
-                odf=gqs.odf(S)
-                if revised_peak_no(np.abs(qg.ODF[index]-odf),qg.odf_faces,0.5)==2:
-                    res.append(np.sum(np.sqrt((qg.ODF[index]-odf)**2)))
-                    pars.append([i,j,k])
-                #print res[-1]
-    ires=np.argmax(res)
-    lx=lmax[pars[ires][0]]
-    lm=lmin[pars[ires][1]]
-    f=fs[pars[ires][2]]
-    """
-
-    
-
-    S=MultiTensor(bvals,bvecs,S0=1.,mf=[1.],mevals=[[0.002,0.0006,0.0006]],mevecs=me0)
-    #S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me0)
-    data2=data.copy()
-    data2[index]=S#data[index]-S
-    gqs2=GeneralizedQSampling(data2,bvals,bvecs,3.,
-                    odf_sphere=odf_sphere,
-                    mask=None,
-                    squared=True,
-                    auto=False,
-                    save_odfs=True)
-    gqs2.peak_thr=0.5
-    gqs2.fit()
-
-    #gqs2.ODF[gqs.ODF<0]=0.
-
-    ODFs=np.zeros((2,len(qg.odf_vertices)))
-    qg.ODF[index][55]=2.
-
-    ODFs[0]=qg.ODF[index]
-    ODFs[1]=gqs2.ODF[index]
-
+    M,R=odf2MT(data,ten,qg)
     #t0=time()
     #M,R=analyze_peaks(data,ten,qg)    
     #t1=time()
     #print 'took ',t1-t0,'.s'
-    #show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
     #show_blobs(gqs2.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    #show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    #ODFs=np.zeros((2,len(qg.odf_vertices)))
+    #ODFs[0]=qg.ODF[index]
+    #ODFs[1]=R[0,0,0]['odf']
+    #show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
 
-    show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
 
