@@ -363,7 +363,7 @@ if __name__ == '__main__':
     #gqs2.ODF[gqs.ODF<0]=0.
 
     ODFs=np.zeros((2,len(qg.odf_vertices)))
-    #qg.ODF[index][55]=2.
+    qg.ODF[index][55]=2.
 
     ODFs[0]=qg.ODF[index]
     ODFs[1]=gqs2.ODF[index]
