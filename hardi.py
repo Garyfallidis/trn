@@ -12,7 +12,10 @@ from dipy.core.geometry import sphere2cart, cart2sphere
 from dipy.core.geometry import vec2vec_rotmat
 from scipy.optimize import fmin as fmin_powell
 from scipy.optimize import leastsq
+from scipy.io import savemat
 from time import time
+from dipy.core.geometry import sphere2cart, cart2sphere
+
 
 def SingleTensor(bvals,gradients,S0,evals,evecs,snr=None):
     """ Simulated signal with a Single Tensor
@@ -138,13 +141,12 @@ def unpackopt3(xopt):
     return mf,mevals
 
 
-
-def load_data(test,type,snr):
+def load_data(test,typ,snr):
 
     if test=='train':
-        fname='/home/eg309/Software/Hardi/Training_'+type+'__SNR='+snr+'__SIGNAL.mat'
+        fname='/home/eg309/Software/Hardi/'+typ+'__SNR='+snr+'__SIGNAL.mat'
     if test=='test':
-        fname='/home/eg309/Software/Hardi/TestData/Testing_'+type+'__SNR='+snr+'__SIGNAL.mat'
+        fname='/home/eg309/Software/Hardi/TestData/'+typ+'__SNR='+snr+'__SIGNAL.mat'
 
     fgrads='/home/eg309/Software/Hardi/gradient_list_257_clean.txt'
     fvertices='/home/eg309/Software/Hardi/TrainingData/ODF_XYZ.mat'
@@ -213,56 +215,58 @@ def analyze_peaks(data,ten,qg):
     M=count_peaks(PK)
     R={}
     for index in np.ndindex(M.shape):
-        print index, M[index]
+        #print index, M[index]
+        if M[index]==0:
+            mf=[0]
+            mevals=[ten.evals[index]]
+            mevecs=[ten.evecs[index]]
+            directions=[get_phi_theta(ten.evecs[index][:,0])]
+            odf=ODF(qg.odf_vertices,mf,mevals,mevecs)            
         if M[index]==1:
             mf=[1.]
-            mevals=[ten[index].evals]
-            mevecs=[ten[index].evecs]
+            mevals=[ten.evals[index]]
+            mevecs=[ten.evecs[index]]
+            directions=[get_phi_theta(ten.evecs[index][:,0])]
+            odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
         if M[index]==2:
             e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
             e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
             signal = data[index]
             mevecs=[all_evecs(e0).T,all_evecs(e1).T]
-            xopt=fmin_powell(opt2,\
-            [0.5,0.5,0.5,0.5,0.5],\
-            (bvals,bvecs,signal,mevecs),\
-            xtol=10**(-6),\
-            ftol=10**(-6),\
-            maxiter=10**6,\
-            disp=False)
-            mf,mevals=unpackopt2(xopt)
+            mf=[0.5,0.5]
+            mevals=np.array(([0.0015,0.0003,0.0003],
+                    [0.0015,0.0003,0.0003]))
+            directions=[get_phi_theta(e0),
+                        get_phi_theta(e1)]
+            odf=qg.ODF[index]
         if M[index]==3:
             e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
             e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
             e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
             signal = data[index]
             mevecs=[all_evecs(e0).T,all_evecs(e1).T,all_evecs(e2).T]
-            xopt=fmin_powell(opt2,\
-            [0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5],\
-            (bvals,bvecs,signal,mevecs),\
-            xtol=10**(-6),\
-            ftol=10**(-6),\
-            maxiter=10**6,\
-            disp=True)
-            mf,mevals=unpackopt3(xopt)        
-        odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
-        R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
+            mf=[0.33,0.33,0.33]
+            mevals=np.array(([0.0015,0.0003,0.0003],
+                        [0.0015,0.0003,0.0003],
+                        [0.0015,0.0003,0.0003]))
+            directions=[get_phi_theta(e0),
+                        get_phi_theta(e1),
+                        get_phi_theta(e2)]
+            odf=qg.ODF[index]        
+        R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf,'directions':directions}
 
     return M,R
-    
+
+def get_phi_theta(e):
+    r,theta,phi=cart2sphere(e[0],e[1],e[2])
+    phi=np.mod(phi,2*np.pi)
+    theta=np.mod(theta,np.pi)
+    return np.array([phi,theta])
+
 def show_no_fibs(M,R):
     for index in np.ndindex(M.shape):
         print index
         print R[index]['m']
-
-def get_all_odfs(M,R,sphsize):
-    ODF=np.zeros(M.shape+(sphsize,))
-    for index in np.ndindex(M.shape):
-        ODF[index]=R[index]['odf']
-    return ODF
-
-def save_for_mat(M,R):
-    pass
 
 def revised_peak_no(odf,odf_faces,peak_thr):
     peaks,inds=peak_finding(odf,odf_faces)
@@ -275,107 +279,155 @@ def revised_peak_no(odf,odf_faces,peak_thr):
     if l>0:                    
         return np.sum(peaks[:l]/np.float(peaks[0])>0)
 
-def decouple(data,bvals,bvecs,qg,me,index,pk_no=3):
+def best_smoother():
 
-    lmax,lmin,fs=lambda_ranges()
-    #"""
-    res=[]
-    pars=[]
-    for (i,lx) in enumerate(lmax):
-        for (j,lm) in enumerate(lmin):
-            for (k,f) in enumerate(fs):
-                S=MultiTensor(bvals,bvecs,S0=1.,mf=[f],mevals=[[lx,lm,lm]],mevecs=me)
-                odf=gqs.odf(S)
-                if revised_peak_no(np.abs(qg.ODF[index]-odf),qg.odf_faces,0.5)==pk_no-1:
-                    res.append(np.sum(np.sqrt((data-S)**2)))
-                    pars.append([i,j,k])
-                #print res[-1]
-    ires=np.argmax(res)
-    lx=lmax[pars[ires][0]]
-    lm=lmin[pars[ires][1]]
-    f=fs[pars[ires][2]]
-    return f,lx,lm
+    for smoo in np.linspace(3,5,10):
+        gqs=GeneralizedQSampling(data,bvals,bvecs,smoo,
+                        odf_sphere=odf_sphere,
+                        mask=None,
+                        squared=True,
+                        auto=False,
+                        save_odfs=True)
+        gqs.peak_thr=0.5
+        gqs.fit()
+        gqs.ODF[gqs.ODF<0]=0.
+        
+        odf=gqs.ODF[0,0,0]
 
-def odf2MT(data,ten,qg):
-    PK=qg.PK
-    IN=qg.IN
-    M=count_peaks(PK)
-    R={}
+        print smoo, np.sum((direct_odf/direct_odf.max() - odf/odf.max())**2)
+
+
+def example(type):
+
+    if type=='1a':
+        mf=[1.]
+        mevals=np.array([[ 0.002 ,  0.0006,  0.0006]])
+        mevecs=[np.array([[ 0.53140014,  0.72508361,  0.43802701],
+                [-0.84668511,  0.43802701,  0.30208724],
+                [ 0.02717085, -0.53140013,  0.84668509]])]
+    if type=='1b':
+        mf=[1.]
+        mevals=np.array([[ 0.002 ,  0.0001,  0.0001]])
+        mevecs=[np.array([[ 0.53140014,  0.72508361,  0.43802701],
+                [-0.84668511,  0.43802701,  0.30208724],
+                [ 0.02717085, -0.53140013,  0.84668509]])]
+    if type=='2a':
+        mf=[0.5,0.5]
+        mevals=np.array([[ 0.002 ,  0.0006,  0.0006],
+                [ 0.002 ,  0.0006,  0.0006]])
+        mevecs=[np.array([[ 0.53140014,  0.72508361,  0.43802701],
+                [-0.84668511,  0.43802701,  0.30208724],
+                [ 0.02717085, -0.53140013,  0.84668509]]),
+                np.array([[-0.99880177, -0.04874515, -0.00435084],
+                [-0.00414365, -0.00435084,  0.99998195],
+                [-0.0487632 ,  0.99880177,  0.00414365]])]    
+    if type=='2b':
+        mf=[0.5,0.5]
+        mevals=np.array([[ 0.002 ,  0.0006,  0.0006],
+                [ 0.002 ,  0.0006,  0.0006]])
+        mevecs=[np.array([[-0.99880177, -0.04874515, -0.00435084],
+                [-0.00414365, -0.00435084,  0.99998195],
+                [-0.0487632 ,  0.99880177,  0.00414365]]),
+                np.array([[ -2.57094204e-03,   9.99996692e-01,  -7.28549000e-05],
+                [-5.66298328e-02,  -7.28549000e-05,   9.98395234e-01],
+                [9.98391926e-01,   2.57094757e-03,   5.66299545e-02]])]
+    if type=='3':
+        mf=[0.33,0.33,0.33]
+        mevals=np.array([[ 0.002 ,  0.0006,  0.0006],
+                [ 0.002 ,  0.0006,  0.0006],
+                [ 0.002 ,  0.0006,  0.0006]])
+        mevecs=[np.array([[ 0.53140014,  0.72508361,  0.43802701],
+                [-0.84668511,  0.43802701,  0.30208724],
+                [ 0.02717085, -0.53140013,  0.84668509]]),
+                np.array([[-0.99880177, -0.04874515, -0.00435084],
+                [-0.00414365, -0.00435084,  0.99998195],
+                [-0.0487632 ,  0.99880177,  0.00414365]]),
+                np.array([[ -2.57094204e-03,   9.99996692e-01,  -7.28549000e-05],
+                [-5.66298328e-02,  -7.28549000e-05,   9.98395234e-01],
+                [9.98391926e-01,   2.57094757e-03,   5.66299545e-02]])]
+    return mf,mevals,mevecs
+
+def get_all_odfs(M,R,sphsize):
+    ODF=np.zeros(M.shape+(sphsize,))
     for index in np.ndindex(M.shape):
-        print index, M[index]
-        if M[index]==1:
-            mf=[1.]
-            mevals=[ten[index].evals]
-            mevecs=[ten[index].evecs]
-        if M[index]==2:
-            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
-            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
-            signal = data[index]
-            mevecs=[all_evecs(e0).T,all_evecs(e1).T]
-            mf=np.zeros(2)
-            mevals=np.zeros((3,3))            
-            for i in range(2):
-                f,lx,lm=decouple(data,bvals,bvecs,qg,mevecs[i],index,pk_no=2)
-                mf[i]=f
-                mevals[i]=np.array([lx,lm,lm])
-        if M[index]==3:
-            e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
-            e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
-            e2=qg.odf_vertices[np.int(qg.IN[index+(2,)])]
-            signal = data[index]
-            mevecs=[all_evecs(e0).T,all_evecs(e1).T,all_evecs(e2).T]   
-            mf=np.zeros(3)
-            mevals=np.zeros((3,3))            
-            for i in range(3):
-                f,lx,lm=decouple(data,bvals,bvecs,qg,mevecs[i],index,pk_no=3)
-                mf[i]=f
-                mevals[i]=np.array([lx,lm,lm])
-        odf=ODF(qg.odf_vertices,mf,mevals,mevecs)
-        R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf}
-    return M,R
+        ODF[index]=R[index]['odf']
+    return ODF
+
+def save_for_mat(test,typ,snr,M,R,sphsize=724):
+
+    if test=='train':
+        fname='/home/eg309/Software/Hardi/Results/Training/interm_'+typ+'__SNR='+snr+'__SIGNAL.mat'
+    if test=='test':
+        fname='/home/eg309/Software/Hardi/Results/Testing/interm_'+typ+'__SNR='+snr+'__SIGNAL.mat'
+
+    F=np.zeros(M.shape+(3,))
+    ODF=np.zeros(M.shape+(sphsize,))
+    L=np.zeros(M.shape+(3,3))
+    RO=np.zeros(M.shape+(3,2))
+
+    for index in np.ndindex(M.shape):
+        for m in range(M[index]):
+            F[index][m]=R[index]['f'][m]
+            L[index][m]=R[index]['evals'][m][::-1]            
+            RO[index][m]=R[index]['directions'][m]
+
+        ODF[index]=R[index]['odf']
+        ODF[index]=ODF[index]/np.float(ODF[index].sum())
+    asf=np.asfortranarray
+    data = {'results':{'M':asf(M),
+                    'F':asf(F),
+                    'L':asf(L), 
+                    'R':asf(RO),
+                    'ODF':asf(ODF)}}
+    savemat(fname,data)
 
 
 if __name__ == '__main__':
 
-    data,bvals,bvecs,odf_sphere=load_data('train','SF','30')#'3D_SF'
-    #reduce
-    data=data[4,5,0]
-    data=data[None,None,None,:]
-    #data=data[:,4:10,:,:]
-    #ten
-    ten = Tensor(100*data, bvals, bvecs)
-    FA = ten.fa()
-    famask=FA>=.2
-    #GQI
-    gqs=GeneralizedQSampling(data,bvals,bvecs,3.,
-                    odf_sphere=odf_sphere,
-                    mask=None,
-                    squared=True,
-                    auto=False,
-                    save_odfs=True)
-    gqs.peak_thr=0.5
-    gqs.fit()
-    gqs.ODF[gqs.ODF<0]=0.
-    #manipulate
-    qg=gqs
-    #get peaks    
-    PK=qg.PK
-    IN=qg.IN
-    M=count_peaks(PK)
-    #lambda ranges
-    lmax,lmin,fs=lambda_ranges()
-    signal=data.squeeze()
-    M,R=odf2MT(data,ten,qg)
-    #t0=time()
-    #M,R=analyze_peaks(data,ten,qg)    
-    #t1=time()
-    #print 'took ',t1-t0,'.s'
-    show_blobs(qg.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
-    #show_blobs(gqs2.ODF[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
-    #show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
-    #ODFs=np.zeros((2,len(qg.odf_vertices)))
-    #ODFs[0]=qg.ODF[index]
-    #ODFs[1]=R[0,0,0]['odf']
-    #show_blobs(ODFs[None,None,:,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+    test='train'
+    types=['Training_SF']
+    SNRs=['10','20','30']
+    smooth=[3.,3.3,3.5]
+    save=True
+    show=False
+    
+    for typ in types:
+        for (i,snr) in enumerate(SNRs):
+            data,bvals,bvecs,odf_sphere=load_data(test,typ,snr)#'3D_SF'
+            #data=data[4,4,0]    
+            #mf,mevals,mevecs=example('1b')    
+            #signal=MultiTensor(bvals,bvecs,S0=1.,mf=mf,mevals=mevals,mevecs=mevecs)
+            #data=signal    
+            #data=data[None,None,None,:]
+            #data=data[:,4:10,:,:]
+            #ten
+            ten = Tensor(100*data, bvals, bvecs)
+            FA = ten.fa()
+            #GQI
+            gqs=GeneralizedQSampling(data,bvals,bvecs,smooth[i],
+                            odf_sphere=odf_sphere,
+                            mask=None,
+                            squared=True,
+                            auto=False,
+                            save_odfs=True)
+            gqs.peak_thr=0.5
+            gqs.fit()
+            gqs.ODF[gqs.ODF<0]=0.
+            #manipulate
+            qg=gqs
+            #pack_results
+            M,R=analyze_peaks(data,ten,qg)
+            if test=='train':
+                K=np.load('trainSF.npy')
+                print 'SNR',snr, 'smooth',smooth[i],\
+                    'Missed',np.sum(np.abs(M-K)>0), \
+                    'Success',100*(np.float(np.prod(M.shape))-np.sum(np.abs(M-K)>0))/np.float(np.prod(M.shape)),'%'
+            if save==True:
+                save_for_mat(test,typ,snr,M,R)
+            #show ODFs
+            if show==True:
+                ODFs=get_all_odfs(M,R,len(qg.odf_vertices))
+                show_blobs(ODFs[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+
 
 
