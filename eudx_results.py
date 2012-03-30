@@ -1,8 +1,10 @@
 import os
 import numpy as np
 import nibabel as nib
+from nibabel import trackvis as tv
 from time import time
 from fos import World, Window, WindowManager
+from fos.actor.point import Point
 from fos.actor.line import Line
 from dipy.reconst.dti import Tensor
 from dipy.reconst.gqi import GeneralizedQSampling
@@ -22,6 +24,8 @@ from dipy.tracking.vox2track import track_counts
 from dipy.viz.colormap import orient2rgb
 from dipy.tracking.metrics import length
 from scipy.stats import ks_2samp
+from dipy.external.fsl import pipe
+from fos.actor.axes import Axes
 
 
 def transform_tracks(tracks,affine):
@@ -240,7 +244,7 @@ def simple_peaks(ODF,faces,thr,low):
 def create_phantom():        
     SNR=100.
     no_seeds=20**3
-    final_name='/home/eg309/Data/orbital_phantoms/'+str(SNR)+'_beauty'    
+    final_name='/home/eg309/Data/orbital_phantoms/'+str(SNR)+'_beauty2'    
     print 'Loading data'
     #btable=np.loadtxt(get_data('dsi515btable'))
     #bvals=btable[:,0]
@@ -437,6 +441,85 @@ def mask_tracks_statistics(mask,shape,seeds,ds,which):
     
     return tracks, tracksA, tracksB, tracksC, tracksD
 
+def create_seeds(shape,no_seeds,mask,which):
+    x,y,z=shape
+    #mask2=np.zeros(mask.shape)
+    #create seeds in mask A
+    seeds=np.zeros((no_seeds,3))
+    sid=0
+    while sid<no_seeds:
+        rx=(x-1)*np.random.rand()
+        ry=(y-1)*np.random.rand()
+        rz=(z-1)*np.random.rand()
+        seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
+        if mask[tuple(np.floor(seed+0.5))]==which:
+            #mask2[tuple(np.floor(seed+0.5))]=2
+            seeds[sid]=seed
+            sid+=1
+    return seeds
+
+def use_camino(mask,maskname='maskA',iteration='20'):
+
+    img=nib.Nifti1Image(mask.astype(np.uint8),np.array([[1,0,0,-31.5],[0,1,0,-31.5],[0,0,1,-32.5],[0,0,0,1]]))
+    nib.save(img,'/tmp/'+maskname+'.nii.gz')
+
+    cmd='track -inputfile /home/eg309/Data/orbital_phantoms/dwi_dir/workflow/tractography/_subject_id_subject1/picopdfs_twoten/data_fit_pdfs.Bdouble -seedfile /tmp/'+maskname+'.nii.gz -iterations '+iteration+' -numpds 2  -inputmodel pico -outputfile data_fit_pdfs_tracked'
+    pipe(cmd)
+    cmd='camino_to_trackvis -i ./data_fit_pdfs_tracked -o data_fit_pdfs_tracked.trk -l 30 -d 64,64,64 -x 1.0,1.0,1.0 --voxel-order LAS'
+    pipe(cmd)
+
+    fname='data_fit_pdfs_tracked.trk'
+    streams,hdr=tv.read(fname,points_space=None)
+    tracks=[s[0] for s in streams]
+    
+    shape=(64,64,64)
+    msk=np.load('/tmp/allmasks.npy')
+    #"""
+    tracks=[t+np.array([32.,32,32]) for t in tracks]
+
+    tracksA=count_tracks_mask(tracks,shape,msk,1)        
+    tracksB=count_tracks_mask(tracks,shape,msk,2)
+    tracksC=count_tracks_mask(tracks,shape,msk,3)    
+    tracksD=count_tracks_mask(tracks,shape,msk,4)    
+
+    print 'Initial', 'A', 'B', 'C', 'D'
+    print len(tracks), len(tracksA), len(tracksB), len(tracksC), len(tracksD)
+    #"""
+    #show_tracks(tracks)
+    alpha=1.
+    lw=2.
+    bg=(1.,1.,1.,1)    
+
+    """
+    #seeds=create_seeds((64,64,64),no_seeds=50,mask=msk,which=1)
+    #seeds2=create_seeds((64,64,64),no_seeds=50,mask=msk,which=2)
+    #seeds3=create_seeds((64,64,64),no_seeds=50,mask=msk,which=3)
+    #seeds4=create_seeds((64,64,64),no_seeds=50,mask=msk,which=4)
+    colors=compute_colors(tracks,alpha=alpha)
+
+    ax = Line(tracks,colors,line_width=lw)
+    #ms = Point(seeds,colors=(1,0,0,1.),pointsize=5.)
+    #ms2 = Point(seeds2,colors=(1,.8,0,1.),pointsize=5.)
+    #ms3 = Point(seeds3,colors=(1,0,1,1.),pointsize=5.)
+    #ms4 = Point(seeds4,colors=(0,1,1,1.),pointsize=5.)
+
+    axes = Axes(100)
+
+    w=World()
+    w.add(ax)
+    #w.add(ms)
+    #w.add(ms2)
+    #w.add(ms3)
+    #w.add(ms4)
+    #w.add(axes)
+
+    wi = Window(caption="Fos",bgcolor=bg,width=1200,height=1000)
+    wi.attach(w)
+    wm = WindowManager()
+    wm.add(wi)
+    wm.run()
+    """
+
 
 if __name__=='__main__':
     #def analyze_phantom():    
@@ -448,6 +531,14 @@ if __name__=='__main__':
     maskB=np.load('/tmp/maskB.npy').astype(np.uint8)
     maskC=np.load('/tmp/maskC.npy').astype(np.uint8)
     maskD=np.load('/tmp/maskD.npy').astype(np.uint8)
+
+    #use_camino(maskA,'maskA','5000')
+    #use_camino(maskB,'maskB','5000')
+    #use_camino(maskC,'maskC','5000')
+    use_camino(maskD,'maskD','5000')
+
+    stop
+
     #Assign labels
     maskA[maskA>0]=1
     maskB[maskB>0]=2
@@ -531,22 +622,6 @@ if __name__=='__main__':
     
     np.set_printoptions(precision=2) 
         
-    def create_seeds(shape,no_seeds,mask,which):
-        x,y,z=shape
-        #mask2=np.zeros(mask.shape)
-        #create seeds in mask A
-        seeds=np.zeros((no_seeds,3))
-        sid=0
-        while sid<no_seeds:
-            rx=(x-1)*np.random.rand()
-            ry=(y-1)*np.random.rand()
-            rz=(z-1)*np.random.rand()
-            seed=np.ascontiguousarray(np.array([rx,ry,rz]),dtype=np.float64)        
-            if mask[tuple(np.floor(seed+0.5))]==which:
-                #mask2[tuple(np.floor(seed+0.5))]=2
-                seeds[sid]=seed
-                sid+=1
-        return seeds
     
     shape=ei.PK.shape[:3]
     seeds1=create_seeds(shape,no_seeds,mask,1)

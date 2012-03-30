@@ -239,6 +239,9 @@ def analyze_peaks(data,ten,qg):
             directions=[get_phi_theta(e0),
                         get_phi_theta(e1)]
             odf=qg.ODF[index]
+            odf=odf#-0.4*odf.max()
+            odf=odf/np.float(odf.sum())
+
         if M[index]==3:
             e0=qg.odf_vertices[np.int(qg.IN[index+(0,)])]
             e1=qg.odf_vertices[np.int(qg.IN[index+(1,)])]
@@ -252,7 +255,9 @@ def analyze_peaks(data,ten,qg):
             directions=[get_phi_theta(e0),
                         get_phi_theta(e1),
                         get_phi_theta(e2)]
-            odf=qg.ODF[index]        
+            odf=qg.ODF[index]
+            odf=odf#-0.4*odf.max()
+            odf=odf/np.float(odf.sum())
         R[index]={'m':M[index],'f':mf,'evals':mevals,'evecs':mevecs,'odf':odf,'directions':directions}
 
     return M,R
@@ -350,7 +355,11 @@ def example(type):
 def get_all_odfs(M,R,sphsize):
     ODF=np.zeros(M.shape+(sphsize,))
     for index in np.ndindex(M.shape):
-        ODF[index]=R[index]['odf']
+        odf=R[index]['odf']
+        if np.sum(odf)>40:
+            ODF[index]=odf*4*np.pi/724.#/np.float(odf.sum())
+        else:
+            ODF[index]=odf
     return ODF
 
 def save_for_mat(test,typ,snr,M,R,sphsize=724):
@@ -372,7 +381,7 @@ def save_for_mat(test,typ,snr,M,R,sphsize=724):
             RO[index][m]=R[index]['directions'][m]
 
         ODF[index]=R[index]['odf']
-        ODF[index]=ODF[index]/np.float(ODF[index].sum())
+        #ODF[index]=ODF[index]/np.float(ODF[index].sum())
     asf=np.asfortranarray
     data = {'results':{'M':asf(M),
                     'F':asf(F),
@@ -384,12 +393,22 @@ def save_for_mat(test,typ,snr,M,R,sphsize=724):
 
 if __name__ == '__main__':
 
-    test='train'
-    types=['Training_SF']
-    SNRs=['10','20','30']
-    smooth=[3.,3.3,3.5]
-    save=True
-    show=False
+    test='test'
+    #types=['Training_SF']
+    types=['Testing_SF','Testing_IV']
+    #SNRs=['10','20','30']
+    SNRs=['05','10','15','20','25','30','35','40']
+    #smooth=[3.,3.3,3.5]
+    smooth=[2.,3.,3.2,3.3,3.5,3.5,3.8,4.]
+
+    types=['Testing_IV']
+    #SNRs=['10','20','30']
+    SNRs=['30']
+    #smooth=[3.,3.3,3.5]
+    smooth=[3.5]
+
+    save=False
+    show=True
     
     for typ in types:
         for (i,snr) in enumerate(SNRs):
@@ -399,7 +418,7 @@ if __name__ == '__main__':
             #signal=MultiTensor(bvals,bvecs,S0=1.,mf=mf,mevals=mevals,mevecs=mevecs)
             #data=signal    
             #data=data[None,None,None,:]
-            #data=data[:,4:10,:,:]
+            data=data[:,4:40,:,:]
             #ten
             ten = Tensor(100*data, bvals, bvecs)
             FA = ten.fa()
@@ -427,7 +446,7 @@ if __name__ == '__main__':
             #show ODFs
             if show==True:
                 ODFs=get_all_odfs(M,R,len(qg.odf_vertices))
-                show_blobs(ODFs[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.)
+                show_blobs(ODFs[:,:,0,:][:,:,None,:],qg.odf_vertices,qg.odf_faces,size=1.5,scale=1.,norm=True)
 
 
 

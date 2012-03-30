@@ -18,6 +18,7 @@ from dipy.tracking.vox2track import track_counts
 from dipy.io.pickles import load_pickle, save_pickle
 from dipy.tracking.distances import bundles_distances_mdf, bundles_distances_mam
 from fos.actor.line import Line
+from eudx_results import show_tracks
 
 fmask1='/home/eg309/Data/John_Seg/_RH_premotor.nii.gz'
 fmask2='/home/eg309/Data/John_Seg/_RH_parietal.nii.gz'
@@ -102,7 +103,125 @@ def is_close(t,lT,thr):
     return False
 
 
+
+
+def load_PX_tracks():
+
+    roi='LH_premotor'
+
+    dn='/home/hadron/from_John_mon12thmarch'
+    dname='/extra_probtrackX_analyses/_subject_id_subj05_101_32/particle2trackvis_'+roi+'_native/'
+    fname=dn+dname+'tract_samples.trk'
+    from nibabel import trackvis as tv
+    points_space=[None,'voxel','rasmm']
+    streamlines,hdr=tv.read(fname,as_generator=True,points_space='voxel')
+    tracks=[s[0] for s in streamlines]
+    del streamlines
+    #return tracks
+
+    qb=QuickBundles(tracks,25./2.5,18)
+    #tl=Line(qb.exemplars()[0],line_width=1)
+    del tracks
+    qb.remove_small_clusters(20)
+
+    tl = TrackLabeler(qb,\
+                qb.downsampled_tracks(),\
+                vol_shape=None,\
+                tracks_line_width=3.,\
+                tracks_alpha=1)
+
+    #put the seeds together
+    #seeds=np.vstack((seeds,seeds2))
+    #shif the seeds
+    #seeds=np.dot(mat[:3,:3],seeds.T).T + mat[:3,3]
+    #seeds=seeds-shift
+    #seeds2=np.dot(mat[:3,:3],seeds2.T).T + mat[:3,3]
+    #seeds2=seeds2-shift    
+    #msk = Point(seeds,colors=(1,0,0,1.),pointsize=2.)
+    #msk2 = Point(seeds2,colors=(1,0,.ppppp2,1.),pointsize=2.)
+    w=World()
+    w.add(tl)
+    #w.add(msk)
+    #w.add(msk2)
+    #w.add(sl)    
+    #create window
+    wi = Window(caption='Fos',\
+                bgcolor=(.3,.3,.6,1.),\
+                width=1600,\
+                height=900)
+    wi.attach(w)
+    #create window manager
+    wm = WindowManager()
+    wm.add(wi)
+    wm.run()
+
+def load_tracks(method='pmt'):
+    from nibabel import trackvis as tv
+    dname='/home/eg309/Data/orbital_phantoms/dwi_dir/subject1/'
+
+    if method=='pmt':
+        fname='/home/eg309/Data/orbital_phantoms/dwi_dir/workflow/tractography/_subject_id_subject1/cam2trk_pico_twoten/data_fit_pdfs_tracked.trk'
+        streams,hdr=tv.read(fname,points_space='voxel')
+        tracks=[s[0] for s in streams]
+    if method=='dti':  fname=dname+'dti_tracks.dpy'    
+    if method=='dsi':  fname=dname+'dsi_tracks.dpy'     
+    if method=='gqs':  fname=dname+'gqi_tracks.dpy'
+    if method=='eit':  fname=dname+'eit_tracks.dpy'
+    if method in ['dti','dsi','gqs','eit']:
+        dpr_linear = Dpy(fname, 'r')
+        tracks=dpr_linear.read_tracks()
+        dpr_linear.close()
+
+    if method!='pmt':
+        tracks = [t-np.array([96/2.,96/2.,55/2.]) for t in tracks if track_range(t,100/2.5,150/2.5)]
+    tracks = [t for t in tracks if track_range(t,100/2.5,150/2.5)]
+
+    print 'final no of tracks ',len(tracks)
+    qb=QuickBundles(tracks,25./2.5,18)
+    #from dipy.viz import fvtk
+    #r=fvtk.ren()
+    #fvtk.add(r,fvtk.line(qb.virtuals(),fvtk.red))
+    #fvtk.show(r)
+    #show_tracks(tracks)#qb.exemplars()[0])
+    #qb.remove_small_clusters(40)
+    del tracks
+    #load 
+    tl = TrackLabeler(qb,\
+                qb.downsampled_tracks(),\
+                vol_shape=None,\
+                tracks_line_width=3.,\
+                tracks_alpha=1)
+
+    #return tracks
+    w=World()
+    w.add(tl)
+    #create window
+    wi = Window(caption='Fos',\
+                bgcolor=(1.,1.,1.,1.),\
+                width=1600,\
+                height=900)
+    wi.attach(w)
+    #create window manager
+    wm = WindowManager()
+    wm.add(wi)
+    wm.run()
+
+
 if __name__=='__main__':
+
+    #tracks=load_PX_tracks()
+    #tracks=load_tracks('dti')
+    #tracks=load_tracks('dsi')
+    #tracks=load_tracks('gqs')
+    #tracks=load_tracks('eit')
+    tracks=load_tracks('pmt')
+
+
+
+
+
+
+    stop
 
     subject=sys.argv[1]
     standard2native=False
@@ -191,6 +310,7 @@ if __name__=='__main__':
                a_low=.0239,step_sz=0.25,ang_thr=80.)
     #euler=EuDX(a=ds.pk(),ind=ds.ind(),seeds=5*10**6, odf_vertices=gqs.odf_vertices,\
     #           a_low=.1,step_sz=0.25,ang_thr=80.)
+
 
     lT=get_luigi_SLFI()
 
