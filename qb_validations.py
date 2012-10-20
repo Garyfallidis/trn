@@ -9,19 +9,19 @@ from dipy.io.pickles import load_pickle, save_pickle
 # segmenation
 from dipy.segment.quickbundles import QuickBundles
 # visualization
-from fos import Window, Region
-from fos.actor import Axes, Text3D, Line
-from fos.actor.line import one_colour_per_line
-from bundle_picker import TrackLabeler, track2rgb
-from dipy.viz import fvtk
+#from fos import Window, Region
+#from fos.actor import Axes, Text3D, Line
+#from fos.actor.line import one_colour_per_line
+#from bundle_picker import TrackLabeler, track2rgb
+#from dipy.viz import fvtk
 # metrics 
 from dipy.tracking.metrics import downsample
 from dipy.tracking.distances import (bundles_distances_mam,
 					bundles_distances_mdf,
 					most_similar_track_mam)
 from dipy.tracking.distances import approx_polygon_track
-from nibabel import trackvis as tv
-import colorsys
+#from nibabel import trackvis as tv
+#import colorsys
 from matplotlib.mlab import find
 
 def load_data(id):
@@ -224,6 +224,7 @@ def half_split_comparisons():
         means = np.sum(counts[:,1:] * counts[:,[0,0,0]],axis=0)/totals
         #print means
         res[id]['means'] = means
+        #print res
     return res
 
 def QB_sizes():
@@ -242,8 +243,8 @@ def QB_sizes():
     return res
 
 
-tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
-#tractography_sizes = [2000, 2000]
+#tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
+tractography_sizes = [2000, 2000]
 downsampling = 12
 qb_threshold = 10
 adjacency_threshold = 10
@@ -312,5 +313,5 @@ if __name__ == '__main__' :
     # QB subset by comparison with the Random one
     """
     '''
-#    half_split_comparisons()
+    results = half_split_comparisons()
 
