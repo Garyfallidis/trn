@@ -191,7 +191,7 @@ def half_split_comparisons():
         res[id]['lengths'] = [len(first), len(second)]
         print len(first), len(second)
         first_qb = QuickBundles(first,qb_threshold,downsampling)
-        n_clus = first_qb.total_clusters()
+        n_clus = first_qb.total_clusters
         res[id]['nclusters'] = n_clus
         print 'QB for first half has', n_clus, 'clusters'
         second_down = [downsample(s, downsampling) for s in second]
@@ -238,8 +238,8 @@ def QB_sizes():
         print id, len(tracks)
         print qb_threshold
         qb = QuickBundles(tracks,qb_threshold,downsampling)
-        res[id]['nclusters'] = qb.total_clusters()
-        print 'QB for has', qb.total_clusters(), 'clusters'
+        res[id]['nclusters'] = qb.total_clusters
+        print 'QB for has', qb.total_clusters, 'clusters'
     return res
 
 
