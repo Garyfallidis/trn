@@ -15,7 +15,7 @@ from dipy.segment.quickbundles import QuickBundles
 #from bundle_picker import TrackLabeler, track2rgb
 #from dipy.viz import fvtk
 # metrics 
-from dipy.tracking.metrics import downsample
+from dipy.tracking.metrics import downsample, length
 from dipy.tracking.distances import (bundles_distances_mam,
 					bundles_distances_mdf,
 					most_similar_track_mam)
@@ -24,13 +24,14 @@ from dipy.tracking.distances import approx_polygon_track
 #import colorsys
 from matplotlib.mlab import find
 
-def load_data(id):
+def load_data(id,limits=[0,np.Inf]):
     ids=['02','03','04','05','06','08','09','10','11','12']
     filename =  'data/subj_'+ids[id]+'_lsc_QA_ref.dpy'
     dp=Dpy(filename,'r')
     print 'Loading', filename
     tracks=dp.read_tracks()
     dp.close()
+    tracks = [t for t in tracks if length(t) >= limits[0] and length(t) <= limits[1]]
     return tracks
 
 def load_pbc_data(id=None):
@@ -54,10 +55,10 @@ def load_pbc_data(id=None):
         return load_pickle('/tmp/'+str(id)+'.pkl')    
 
 
-def get_tractography_sizes():
+def get_tractography_sizes(limits):
     sizes = []
     for d in range(10):
-        sizes.append(len(load_data(d)))
+        sizes.append(len(load_data(d,limits)))
     return sizes
 
 def show_qb_streamlines(tracks,qb):
@@ -156,6 +157,13 @@ def split_halves(id):
         second_half= np.random.permutation(np.arange(len(tracks)))[M:N]
         return [tracks[n] for n in first_half], [tracks[n] for n in second_half]
 
+def get_tracks(id, limits):
+        tracks = load_data(id, limits)
+        N = test_tractography_sizes[id]
+        if N == 0: N=-1
+	selection = np.random.permutation(np.arange(len(tracks)))[:N]
+        return [tracks[n] for n in selection]
+
 '''
 coverage = # neighb tracks / #tracks 
          = cntT.sum()/len(T)
@@ -180,8 +188,6 @@ def binarise(D, thr):
         return 1*(np.array(D)<thr)
 
 def half_split_comparisons():
-
-    # size 02 175544
 
     res = {}
 
@@ -227,24 +233,29 @@ def half_split_comparisons():
         #print res
     return res
 
-def QB_sizes():
+def QB_sizes(limits=[0,np.Inf]):
 
     res = {}
 
-    for id in range(len(tractography_sizes)):
-        tracks = load_data(id)
+    for id in range(len(test_tractography_sizes)):
+        tracks = get_tracks(id, limits)
         res[id] = {}
-        res[id]['length'] = len(tracks)
-        print id, len(tracks)
+        res[id]['filtered'] = len(tracks)
+        print id, res[id]['filtered']
         print qb_threshold
         qb = QuickBundles(tracks,qb_threshold,downsampling)
         res[id]['nclusters'] = qb.total_clusters
         print 'QB for has', qb.total_clusters, 'clusters'
     return res
 
-
-#tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
-tractography_sizes = [2000, 2000]
+full_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
+#test_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
+#test_tractography_sizes = [100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000]
+#test_tractography_sizes = [140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000]
+#test_tractography_sizes = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000]
+#test_tractography_sizes = [1001,1002,1003]
+#test_tractography_sizes = [0,0,0,0,0,0,0,0,0,0]
+test_tractography_sizes = [80000,80000,80000,80000,80000,80000,80000,80000,80000,80000]
 downsampling = 12
 qb_threshold = 10
 adjacency_threshold = 10
@@ -313,5 +324,8 @@ if __name__ == '__main__' :
     # QB subset by comparison with the Random one
     """
     '''
-    results = half_split_comparisons()
+    # results = half_split_comparisons()
 
+    results = QB_sizes([40,np.Inf])
+    table = np.array([(results[r]['filtered'],results[r]['nclusters'],full_tractography_sizes[r]) for r in range(len(results))], dtype='float')
+    print np.corrcoef(np.transpose(table))
