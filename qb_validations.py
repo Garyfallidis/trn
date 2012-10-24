@@ -23,6 +23,8 @@ from dipy.tracking.distances import approx_polygon_track
 #from nibabel import trackvis as tv
 #import colorsys
 from matplotlib.mlab import find
+from copy import deepcopy
+import pickle
 
 def load_data(id,limits=[0,np.Inf]):
     ids=['02','03','04','05','06','08','09','10','11','12']
@@ -248,17 +250,72 @@ def QB_sizes(limits=[0,np.Inf]):
         print 'QB for has', qb.total_clusters, 'clusters'
     return res
 
+
+def QB_reps(limits=[0,np.Inf],reps=1):
+
+    ids=['02','03','04','05','06','08','09','10','11','12']
+
+    sizes = []
+    
+    for id in range(len(test_tractography_sizes)):
+        filename =  'subj_'+ids[id]+'_QB_reps.pkl'
+        f = open(filename,'w')
+        ur_tracks = get_tracks(id, limits)
+        res = {}
+        res['filtered'] = len(ur_tracks)
+        res['qb_threshold'] = qb_threshold
+        res['limits'] = limits
+        #res['ur_tracks'] = ur_tracks
+        print 'Dataset', id, res['filtered'], 'filtered tracks'
+        res['shuffle'] = {}
+        res['clusters'] = {}
+        res['nclusters'] = {}
+        res['centroids'] = {}
+        res['cluster_sizes'] = {}
+        for i in range(reps):
+            print 'Subject', ids[id], 'shuffle', i
+            shuffle = np.random.permutation(np.arange(len(ur_tracks)))
+            res['shuffle'][i] = shuffle
+            tracks = [ur_tracks[i] for i in shuffle]
+            qb = QuickBundles(tracks,qb_threshold,downsampling)
+            res['clusters'][i] = {}
+            for k in qb.clusters().keys():
+                # this would be improved if
+                # we 'enumerated' QB's keys and used the enumerator as
+                # as the key in the result 
+                res['clusters'][i][k] = qb.clusters()[k]['indices']
+            res['centroids'][i] = qb.centroids            
+            res['nclusters'][i] = qb.total_clusters
+            res['cluster_sizes'][i] = qb.clusters_sizes()
+            print 'QB for has', qb.total_clusters, 'clusters'
+            sizes.append(qb.total_clusters)
+        pickle.dump(res, f)
+        f.close()
+        print 'Results written to', filename
+    return sizes
+
+def get_QB_partitions(id):
+    ids=['02','03','04','05','06','08','09','10','11','12']
+    filename =  'subj_'+ids[id]+'_QB_reps.pkl'
+    f = open(filename, 'r')
+    print 'loading picked file ...'
+    res = pickle.load(f)
+    print 'finished ...'
+    print [len(res['clusters'][i]) for i in np.arange(25)]
+
 full_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
 #test_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
 #test_tractography_sizes = [100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000]
 #test_tractography_sizes = [140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000, 140000]
 #test_tractography_sizes = [10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000, 10000]
 #test_tractography_sizes = [1001,1002,1003]
-#test_tractography_sizes = [0,0,0,0,0,0,0,0,0,0]
-test_tractography_sizes = [80000,80000,80000,80000,80000,80000,80000,80000,80000,80000]
+test_tractography_sizes = [0,0,0,0,0,0,0,0,0,0]
+#test_tractography_sizes = [80000,80000,80000,80000,80000,80000,80000,80000,80000,80000]
 downsampling = 12
 qb_threshold = 10
 adjacency_threshold = 10
+reps = 25
+filter_range = [40, np.Inf]
 
 if __name__ == '__main__' :
     '''
@@ -326,6 +383,32 @@ if __name__ == '__main__' :
     '''
     # results = half_split_comparisons()
 
+    '''
     results = QB_sizes([40,np.Inf])
     table = np.array([(results[r]['filtered'],results[r]['nclusters'],full_tractography_sizes[r]) for r in range(len(results))], dtype='float')
     print np.corrcoef(np.transpose(table))
+    '''
+
+    '''
+    # run with reps=25, filter_range=[40,np.Inf]
+    # test_tractography_sizes = [0,0,0,0,0,0,0,0,0,0]
+    # this setting ensures that QB is run on the maximum (filtered) data
+    results = QB_reps(filter_range, reps)
+    counts = np.array(results).reshape((10,25)).transpose()
+    counts_subj_means = np.mean(counts,axis=0) #inter subject means
+    print 'grand mean', np.mean(counts_subj_means)
+    np.std(counts_subj_means) #inter subjects s.d.
+    np.min(counts_subj_means) # subj min
+    np.max(counts_subj_means) # subj max
+    np.std(counts,axis=0) #intra subject s.d.s
+    np.mean(np.std(counts,axis=0)) #mean intra subject s.d.
+    f = open('table_full.pkl','r') # sizes saved from earlier calculations 
+    sizes = pickle.load(f)
+    f.close()
+    compressions = track_counts/counts_subj_means
+    np.mean(compressions)
+    np.mean(track_counts)
+    np.std(track_counts)
+    '''
+
+    get_QB_partitions(0)
