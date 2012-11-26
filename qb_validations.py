@@ -25,6 +25,8 @@ from dipy.tracking.distances import approx_polygon_track
 from matplotlib.mlab import find
 from copy import deepcopy
 import pickle
+import hung_APC
+
 
 def load_data(id,limits=[0,np.Inf]):
     ids=['02','03','04','05','06','08','09','10','11','12']
@@ -262,7 +264,7 @@ def QB_reps(limits=[0,np.Inf],reps=1):
         f = open(filename,'w')
         ur_tracks = get_tracks(id, limits)
         res = {}
-        res['filtered'] = len(ur_tracks)
+        #res['filtered'] = len(ur_tracks)
         res['qb_threshold'] = qb_threshold
         res['limits'] = limits
         #res['ur_tracks'] = ur_tracks
@@ -292,16 +294,125 @@ def QB_reps(limits=[0,np.Inf],reps=1):
         pickle.dump(res, f)
         f.close()
         print 'Results written to', filename
+
+def QB_reps_singly(limits=[0,np.Inf],reps=1):
+
+    ids=['02','03','04','05','06','08','09','10','11','12']
+    replabs = [str(i) for i in range(reps)]
+
+    for id in range(len(test_tractography_sizes)):
+        ur_tracks = get_tracks(id, limits)
+        for i in range(reps):
+            res = {}
+            #res['filtered'] = len(ur_tracks)
+            res['qb_threshold'] = qb_threshold
+            res['limits'] = limits
+            res['shuffle'] = {}
+            res['clusters'] = {}
+            res['nclusters'] = {}
+            res['centroids'] = {}
+            res['cluster_sizes'] = {}
+            print 'Subject', ids[id], 'shuffle', i
+            shuffle = np.random.permutation(np.arange(len(ur_tracks)))
+            res['shuffle'] = shuffle
+            tracks = [ur_tracks[j] for j in shuffle]
+            print '... starting QB'
+            qb = QuickBundles(tracks,qb_threshold,downsampling)
+            print '... finished QB'
+            res['clusters'] = {}
+            for k in qb.clusters().keys():
+                # this would be improved if
+                # we 'enumerated' QB's keys and used the enumerator as
+                # as the key in the result 
+                res['clusters'][k] = qb.clusters()[k]['indices']
+            res['centroids'] = qb.centroids            
+            res['nclusters'] = qb.total_clusters
+            res['cluster_sizes'] = qb.clusters_sizes()
+            print 'QB for has', qb.total_clusters, 'clusters'
+            filename =  'subj_'+ids[id]+'_QB_rep_'+replabs[i]+'.pkl'
+            f = open(filename,'w')
+            pickle.dump(res, f)
+            f.close()
+        print 'Results written to', filename
     return sizes
 
-def get_QB_partitions(id):
+def overlap_matrix(clusters1,shuffle1,clusters2,shuffle2):
+    '''
+    calculate intersection matrix of a pair
+    of clusterings clusters1 and clusters2. shuffle1 and shuffle2 are the labels for 
+    the items in the clusterings.
+    
+    Parameters:
+    ===========
+    clusters1: LSC holds list of track indices in bundles
+    shuffle1: original labels of tracks in clusters1
+    clusters2: LSC holds list of (same) track indices in bundles
+    shuffle2: original labels of tracks in clusters2
+    '''
+    #print 'calculating [square] overlap matrix ... '
+    M = np.max([len(clusters1),len(clusters2)])
+    N = np.zeros((M,M))
+    clusters2_dic = {}
+    for j in range(len(clusters2)):
+        for i in clusters2[j]:
+            clusters2_dic[shuffle2[i]] = j
+    labs=set([clusters2_dic[k] for k in clusters2_dic.keys()])
+    # clusters2_dic is a dictionary in which we can look up the clusters2-class 
+    # to which an indexed track has been assigned 
+    for i in range(len(clusters1)):
+        for j in clusters1[i]:
+            N[i,clusters2_dic[shuffle1[j]]] += 1
+    return N
+
+def OMA(N):
+
+    hung_agree, hung_map = hungarian_APC(N)    
+    
+    return hung_agree
+
+def hungarian_APC(N):
+    '''
+    Hungarian matching (APC: Lawler - implemented by G. CARPANETO, S. MARTELLO, P. TOTH)
+    '''
+    #print '... entering fortran binary'
+    mapping, cost, errorcode  = hung_APC.apc(-N)
+    if errorcode != 0:
+        print 'APC error code %d: need to increase MAXSIZE in APC.f to handle this problem' % (errorcode)
+    total=np.sum(np.diag(N[:,mapping-1]))
+    if total != -cost:
+        print 'cost %d and total %d unequal!' % (-cost,total)
+    #total = -cost    
+    #print 'mapping length', len(mapping), 'cost', cost, 'total', total
+    #print 'percent agreements: ', 100*total/np.sum(N)
+    
+    return 100*total/np.sum(N), mapping-1
+
+def test_OMA(id,rep1,rep2):
     ids=['02','03','04','05','06','08','09','10','11','12']
-    filename =  'subj_'+ids[id]+'_QB_reps.pkl'
-    f = open(filename, 'r')
-    print 'loading picked file ...'
-    res = pickle.load(f)
-    print 'finished ...'
-    print [len(res['clusters'][i]) for i in np.arange(25)]
+    replabs = [str(i) for i in range(reps)]
+    filename1 =  'subj_'+ids[id]+'_QB_rep_'+replabs[rep1]+'.pkl'
+    print filename1
+    f1 = open(filename1, 'r')
+    try:
+        res1 = pickle.load(f1)
+    except:
+        print 'problem with', filename1
+        f1.close()
+        return Null, Null
+    f1.close()
+    filename2 =  'subj_'+ids[id]+'_QB_rep_'+replabs[rep2]+'.pkl'
+    print filename2
+    f2 = open(filename2, 'r')
+    try:
+        res2 = pickle.load(f2)
+    except:
+        print 'problem with', filename1
+        f2.close()
+        return np.NaN, np.NaN
+    f2.close()
+    N = overlap_matrix(res1['clusters'], res1['shuffle'], res2['clusters'], res2['shuffle'])
+    return N, OMA(N)
+    
 
 full_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
 #test_tractography_sizes = [175544, 161218, 155763, 141877, 149272, 226456, 168833, 186543, 191087, 153432]
@@ -314,7 +425,7 @@ test_tractography_sizes = [0,0,0,0,0,0,0,0,0,0]
 downsampling = 12
 qb_threshold = 10
 adjacency_threshold = 10
-reps = 25
+reps = 16
 filter_range = [40, np.Inf]
 
 if __name__ == '__main__' :
@@ -411,4 +522,23 @@ if __name__ == '__main__' :
     np.std(track_counts)
     '''
 
+    '''
     get_QB_partitions(0)
+    '''
+
+    '''
+    QB_reps_singly(limits=[40.,np.Inf],reps=reps)
+    '''
+
+    omas = []
+    for s in range(10):
+        for r1 in range(reps-1):
+            for r2 in range(r1+1,reps):
+                N, oma = test_OMA(s,r1,r2)
+                print s,r1,r2,oma
+                omas.append(oma)
+
+    f = open('OMA.pkl','w')
+    pickle.dump(omas,f)
+    f.close()
+    
