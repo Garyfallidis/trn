@@ -1420,9 +1420,6 @@ def plot_timings():
     
     #return res
     save_pickle('/tmp/res.pkl',res)
-    
-
-       
 
 def compare_tightness():
     
