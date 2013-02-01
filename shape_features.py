@@ -14,6 +14,7 @@ def vec2plane(u, v, w):
     n = np.cross(v, w)
     return u - np.dot(u, n) * n / np.linalg.norm(n)
 
+
 def rotation_matrix(axis, theta_degree):
     """ Create rotation matrix for angle theta along axis
 
@@ -33,12 +34,43 @@ def rotation_matrix(axis, theta_degree):
     axis = 1. * axis / np.sqrt(np.dot(axis, axis))
     a = np.cos(theta / 2)
     b, c, d = - axis * np.sin(theta / 2)
-    mat = np.array([[a*a + b*b - c*c - d*d, 2*(b*c - a*d), 2*(b*d + a*c)],
-                     [2*(b*c + a*d), a*a + c*c - b*b - d*d, 2*(c*d - a*b)],
-                     [2*(b*d - a*c), 2*(c*d + a*b), a*a + d*d - b*b - c*c]])
+    mat = np.array([[a * a + b * b - c * c - d * d, 2 * (b * c - a * d), 2 * (b * d + a * c)],
+                    [2 * (b * c + a * d), a * a + c * c - b * b - d * d, 2 * (c * d - a * b)],
+                    [2 * (b * d - a * c), 2 * (c * d + a * b), a * a + d * d - b * b - c * c]])
     return mat
 
 
+
+
+def invariant_angles(S):
+
+    the_phi = []
+
+    for i in range(2, len(S)):
+
+        u = S[i] - S[i - 1]
+        u = u / np.linalg.norm(u)
+
+        v = S[i - 1] - S[i - 2]
+        v = v / np.linalg.norm(v)
+
+        c = np.cross(u, v)
+
+        theta = np.arccos(np.dot(u, v)) * 180 / np.pi
+
+        if i == 2:
+            phi = 0
+        else:
+            phi = np.arccos(np.dot(c_prev, c)) * 180 / np.pi
+
+        # print theta
+        # print phi
+        the_phi.append((theta, phi))
+        c_prev = c
+
+    return np.array(the_phi)
+
+#dummy
 sq = np.sqrt(2.) / 2.
 
 S = np.array([[0, 0, 0],
@@ -48,66 +80,38 @@ S = np.array([[0, 0, 0],
 
 S = S * 3
 
-Rot = rotation_matrix(np.array([1, 0, 0]), 45)
+print 'Dummy standard'
+print invariant_angles(S)
 
-S = np.dot(Rot, S.T).T
+Sinit = S.copy()
 
-# T, N, B, k, t = frenet_serret(S)
+Rot = rotation_matrix(np.array([0, 1, 0]), 30)
+
+S = np.dot(Rot, S.T).T + np.array([1, 0, 0])
+print 'Dummy translated'
+print invariant_angles(S)
 
 from dipy.viz import fvtk
 r = fvtk.ren()
-fvtk.add(r, fvtk.line(S, fvtk.red))
-#fvtk.add(r, fvtk.line(S2, fvtk.green))
+fvtk.add(r, fvtk.line(Sinit, fvtk.red))
+fvtk.add(r, fvtk.line(S, fvtk.green))
+fvtk.add(r, fvtk.axes())
 fvtk.show(r)
 
-t_ext = np.vstack((S[0], S[0] + np.array([1, 0, 0])))
-b_ext = np.vstack((S[0], S[0] + np.array([0, 1, 0])))
-n_ext = np.vstack((S[0], S[0] + np.array([0, 0, 1])))
+# helix
+theta = 2 * np.pi * np.linspace(0, 2, 100)
+x = np.cos(theta)
+y = np.sin(theta)
+z = theta / (2 * np.pi)
+Shel = np.vstack((x, y, z)).T
 
-fvtk.add(r, fvtk.line(t_ext, fvtk.dark_red))
-fvtk.add(r, fvtk.line(b_ext, fvtk.green))
-fvtk.add(r, fvtk.line(n_ext, fvtk.blue))
+from dipy.tracking.metrics import downsample
+Shel = downsample(Shel, 12)
 
+print 'Helix standard'
+print invariant_angles(Shel)
+Shel2 = np.dot(Rot, Shel.T).T
 
-t = (S[1] - S[0]) / np.linalg.norm(S[1] - S[0])
-R = vec2vec_rotmat(np.array([1, 0, 0]), t)
-b = np.dot(R, np.array([0, 1, 0]))
-n = np.dot(R, np.array([0, 0, 1]))
+print 'Helix translated'
+print invariant_angles(Shel2)
 
-for i in range(2, len(S)): 
-
-	t_ext = np.vstack((S[i-1], S[i-1] + t))
-	b_ext = np.vstack((S[i-1], S[i-1] + b))
-	n_ext = np.vstack((S[i-1], S[i-1] + n))
-
-	fvtk.add(r, fvtk.line(t_ext, fvtk.dark_red))
-	fvtk.add(r, fvtk.line(b_ext, fvtk.green))
-	fvtk.add(r, fvtk.line(n_ext, fvtk.blue))
-
-	tnew = (S[i] - S[i-1]) / np.linalg.norm(S[i] - S[i-1])
-
-	print 'theta', np.arccos(np.dot(tnew, n)) * 180 / np.pi
-	tnew_proj = vec2plane(tnew, t, b)
-	print 'phi', np.arccos(np.dot(tnew_proj, t)) * 180 / np.pi
-
-	#print 'theta', np.arccos(np.dot(tnew, t)) * 180 / np.pi
-	#tnew_proj = vec2plane(tnew, b, n)
-	#print 'phi', np.arccos(np.dot(tnew_proj, n)) * 180 / np.pi
-
-	R = vec2vec_rotmat(t, tnew)
-	b = np.dot(R, b)
-	n = np.dot(R, n)
-	t = tnew
-
-"""
-T = (S[1] - S[0]) / np.linalg.norm(S[1] - S[0])
-R = vec2vec_rotmat(np.array([1, 0, 0]), T)
-B = np.dot(R, np.array([0, 1, 0]))
-N = np.dot(R, np.array([0, 0, 1]))
-
-Tnew = (S[2] - S[1]) / np.linalg.norm(S[2] - S[1])
-print 'theta', np.arccos(np.dot(Tnew, T)) * 180 / np.pi
-
-Tnew_proj = vec2plane(Tnew, B, N)
-print 'phi', np.arccos(np.dot(Tnew_proj, N)) * 180 / np.pi
-"""
